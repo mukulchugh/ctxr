@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ctxr": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "ctxr[mcp,whisper] @ git+https://github.com/mukulchugh/ctxr", "ctxr-mcp"]
+    }
+  }
+}

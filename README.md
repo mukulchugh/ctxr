@@ -1,0 +1,141 @@
+# ctxr
+
+![ctxr](assets/banner.png)
+
+**Context from video, for agents.**
+
+ctxr turns a YouTube video into something an AI agent can actually learn from: the transcript, the frames where the screen changed, and one Markdown walkthrough that puts each frame next to the words spoken while it was on screen. Point it at a single video, a playlist, or a page full of embedded demos and it produces a folder per video plus an index over all of them.
+
+Think of it as Context7 for videos. Documentation is text, so agents can read it. Product demos, tutorials and talks are video, so they could not. ctxr closes that gap.
+
+```
+uv tool install "ctxr[whisper,mcp] @ git+https://github.com/mukulchugh/ctxr"
+ctxr --page https://example.com/product/demos --out ./demos
+```
+
+One command finds every video embedded on the page and produces a folder per video:
+
+```
+demos/
+  README.md                 how to read this folder (written for an agent)
+  INDEX.md                  one row per video: date, title, length, frames, transcript source
+  ALL-DEMOS.md              every walkthrough joined into one file for single-shot ingestion
+  2026-09-15-comments-on-dashboards-VIDEOID/
+    README.md               the walkthrough
+    manifest.json           frames with the transcript segments aligned under each
+    transcript.json .srt .txt
+    info.json               title, channel, date, duration, description, tags
+    frames/0007_01m23s.jpg  1280px frames, one per visible screen change
+```
+
+A walkthrough reads like this. Every timestamp links to that second on YouTube.
+
+```markdown
+### 00:22 ([watch](https://youtu.be/VIDEOID?t=22))
+
+![00:22](frames/0004_00m22s.jpg)
+
+all of these are crowded into the top left corner, and I want them spread evenly across the width
+
+### 00:32 ([watch](https://youtu.be/VIDEOID?t=32))
+
+![00:32](frames/0005_00m32s.jpg)
+
+so I add a horizontal container and drop the three controls into it
+```
+
+## Install
+
+Requires Python 3.10+ and `ffmpeg` on your PATH (`brew install ffmpeg` or `apt install ffmpeg`).
+
+```
+uv tool install "ctxr @ git+https://github.com/mukulchugh/ctxr"               # captions from YouTube only
+uv tool install "ctxr[whisper] @ git+https://github.com/mukulchugh/ctxr"      # plus local transcription for videos without usable captions
+uv tool install "ctxr[whisper,mcp] @ git+https://github.com/mukulchugh/ctxr"  # plus the MCP server (ctxr-mcp)
+```
+
+Or run it without installing: `uvx --from "ctxr @ git+https://github.com/mukulchugh/ctxr" ctxr <url>`. ctxr is installed from this repository; there is no PyPI package.
+
+## Usage
+
+```
+ctxr https://youtu.be/VIDEOID                           # one video
+ctxr --playlist https://www.youtube.com/playlist?list=… # every video in a playlist or channel
+ctxr --page https://example.com/product/demos           # every YouTube video embedded on a page
+ctxr --page URL --out ./docs --limit 5                  # try the first five first
+```
+
+Options:
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--out DIR` | `./ctxr-out` | Where the folders go |
+| `--scene 0.05` | 0.05 | Scene-change threshold, 0 to 1. Lower means more frames. 0.05 suits screen recordings |
+| `--min-gap 10` | 10 | Also take a frame at least this many seconds apart, so slow stretches are still covered |
+| `--every N` | off | Fixed grid every N seconds instead of scene detection |
+| `--whisper-all` | off | Transcribe locally even when YouTube captions exist (cleaner punctuation) |
+| `--cooldown 5` | 5 | Pause after each video. See rate limits below |
+| `--keep-video` | off | Keep the downloaded mp4 next to the frames |
+| `--force` | off | Redo folders that already have a manifest |
+| `--self-test` | | Run the built-in check and exit |
+
+A folder that already has `manifest.json` is skipped, so an interrupted batch resumes where it stopped.
+
+## How it works
+
+1. **Find the videos.** `--page` fetches the page and pulls every YouTube id out of `watch?v=`, `youtu.be/`, `/embed/` and `i.ytimg.com/vi/` thumbnail links, in page order. `--playlist` asks yt-dlp for the flat list.
+2. **Download.** yt-dlp fetches a 720p mp4 and the metadata JSON. The mp4 is deleted after the frames are cut unless you pass `--keep-video`.
+3. **Transcript.** youtube-transcript-api fetches English captions. If the video has none, or YouTube blocks the request, or you pass `--whisper-all`, ffmpeg extracts 16 kHz mono audio and faster-whisper (small model, runs locally) transcribes it. The manifest records which source was used.
+4. **Frames.** One ffmpeg pass with a scene-change filter, a 1.5 second debounce so a transition does not produce a burst, and a floor of one frame every `--min-gap` seconds. Frame count scales with how much the picture changes, not with frame rate.
+5. **Align.** Each transcript segment is placed under the last frame shown at or before the segment starts.
+6. **Write.** README.md, manifest.json, transcript files per video, then INDEX.md, ALL-DEMOS.md and an agent-facing README.md at the root.
+
+## Rate limits
+
+YouTube publishes no limits for these endpoints, but it rate-limits quickly. In one 73-video run from a home connection, caption requests started failing after about 17 videos in 5 minutes and downloads returned 403 every 10 videos or so. ctxr therefore runs yt-dlp with its own `-t sleep` preset (a 10 to 20 second random pause before each download, 0.75 seconds between requests), pauses `--cooldown` seconds after each video, and on a failed download backs off 15, 45 and 90 seconds while switching YouTube player client. With those settings the rest of that run finished with zero failures, at about one video per minute.
+
+## Teaching an agent with the output
+
+The root README.md tells an agent how to read the folder. A ready-to-use prompt is in [docs/AGENT-PROMPT.md](docs/AGENT-PROMPT.md). The short version: read INDEX.md, then each walkthrough in date order, treat the frames as ground truth for the UI and the narration as the explanation, and cite the video and timestamp for anything specific.
+
+## Use it from an agent
+
+ctxr ships as an MCP server and as a skill, so an agent can run the whole workflow itself and then query the result in small pieces instead of reading 400 KB of Markdown.
+
+**MCP tools** (`ctxr-mcp`, stdio): `ctxr_process` (ids, a playlist, or every video on a page; `background: true` for big batches), `ctxr_status`, `ctxr_index`, `ctxr_search` (where is X said, with the frame on screen and a link to that second), `ctxr_walkthrough` (one video, section by section, with a time window), `ctxr_frame` (the screen at second t, as an image), and a `learn_from_videos` prompt. Design notes: [docs/MCP.md](docs/MCP.md).
+
+Claude Code, as a plugin (skill + MCP server together):
+```
+/plugin marketplace add mukulchugh/ctxr
+/plugin install ctxr@ctxr
+```
+
+Codex, in `~/.codex/config.toml`:
+```toml
+[mcp_servers.ctxr]
+command = "uvx"
+args = ["--from", "ctxr[mcp,whisper] @ git+https://github.com/mukulchugh/ctxr", "ctxr-mcp"]
+```
+
+Cursor, in `~/.cursor/mcp.json` (Claude Code accepts the same block in a project `.mcp.json`):
+```json
+{ "mcpServers": { "ctxr": { "type": "stdio", "command": "uvx",
+  "args": ["--from", "ctxr[mcp,whisper] @ git+https://github.com/mukulchugh/ctxr", "ctxr-mcp"] } } }
+```
+
+The skill alone, into Claude Code, Codex, Cursor and other Agent Skills clients:
+```
+npx skills add mukulchugh/ctxr
+```
+
+The output folder for MCP calls is `out` per call, else `$CTXR_OUT`, else `~/ctxr`.
+
+## Limits
+
+- Captions are automatic (YouTube or Whisper), so product names can be misheard. The frames are the ground truth for UI labels.
+- A short burst of screen changes can produce frames with no narration under them. They are kept and marked, because the frame usually shows the result of the previous action.
+- Only YouTube for now. Local files and other platforms are a small change away since everything after the download is source-agnostic.
+
+## License
+
+MIT

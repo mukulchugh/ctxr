@@ -1,0 +1,13 @@
+{
+  "name": "ctxr",
+  "displayName": "ctxr",
+  "version": "0.1.0",
+  "description": "Context from video, for agents. Turn YouTube videos into transcripts, keyframes and a walkthrough an AI can learn from; search and read them through MCP tools.",
+  "author": { "name": "Mukul Chugh", "url": "https://github.com/mukulchugh" },
+  "homepage": "https://github.com/mukulchugh/ctxr",
+  "repository": "https://github.com/mukulchugh/ctxr",
+  "license": "MIT",
+  "keywords": ["video", "youtube", "transcript", "keyframes", "context", "mcp", "agents"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

@@ -1,0 +1,16 @@
+{
+  "name": "ctxr",
+  "description": "Context from video, for agents: ctxr turns YouTube videos into transcripts, keyframes and walkthroughs an AI can learn from.",
+  "owner": {
+    "name": "Mukul Chugh",
+    "url": "https://github.com/mukulchugh"
+  },
+  "plugins": [
+    {
+      "name": "ctxr",
+      "source": "./",
+      "description": "Context from video, for agents. MCP tools to turn YouTube videos into transcripts, keyframes and walkthroughs, then search and read them, plus a skill that teaches the agent the workflow.",
+      "version": "0.1.0"
+    }
+  ]
+}

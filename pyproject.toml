@@ -1,0 +1,36 @@
+[project]
+name = "ctxr"
+version = "0.1.0"
+description = "Context from video, for agents. Turns YouTube videos into a transcript, unique frames, and a Markdown walkthrough that puts each frame next to what was being said."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Mukul Chugh" }]
+keywords = ["youtube", "video", "transcript", "keyframes", "llm", "agents", "context", "markdown"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Multimedia :: Video",
+  "Topic :: Text Processing :: Markup :: Markdown",
+]
+dependencies = ["yt-dlp>=2025.1.1", "youtube-transcript-api>=1.0"]
+
+[project.optional-dependencies]
+whisper = ["faster-whisper>=1.1"]
+mcp = ["mcp>=2,<3"]
+
+[project.scripts]
+ctxr = "ctxr.cli:main"
+ctxr-mcp = "ctxr.mcp_server:main"
+
+[project.urls]
+Homepage = "https://github.com/mukulchugh/ctxr"
+Issues = "https://github.com/mukulchugh/ctxr/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ctxr"]
