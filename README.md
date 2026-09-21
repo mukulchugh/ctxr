@@ -1,6 +1,10 @@
 # ctxr
 
-![ctxr](assets/banner.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/banner.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/banner-light.png">
+  <img src="assets/banner-light.png" alt="ctxr: Context from video, for agents." width="1600" height="400">
+</picture>
 
 **Context from video, for agents.**
 
@@ -93,6 +97,8 @@ A folder that already has `manifest.json` is skipped, so an interrupted batch re
 ## Rate limits
 
 YouTube publishes no limits for these endpoints, but it rate-limits quickly. In one 73-video run from a home connection, caption requests started failing after about 17 videos in 5 minutes and downloads returned 403 every 10 videos or so. ctxr therefore runs yt-dlp with its own `-t sleep` preset (a 10 to 20 second random pause before each download, 0.75 seconds between requests), pauses `--cooldown` seconds after each video, and on a failed download backs off 15, 45 and 90 seconds while switching YouTube player client. With those settings the rest of that run finished with zero failures, at about one video per minute.
+
+A source-backed write-up of what blocks, what works, what it costs and where the terms of service stand is in [docs/RATE-LIMITS.md](docs/RATE-LIMITS.md).
 
 ## Teaching an agent with the output
 
