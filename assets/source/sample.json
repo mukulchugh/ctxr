@@ -1,0 +1,20 @@
+{
+  "video_id": "dQw4w9WgXcQ",
+  "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=100",
+  "timestamp": "01:40",
+  "frame_seconds": 100.04,
+  "next_frame_seconds": 102.64,
+  "frame_file": "frame.jpg",
+  "frame_sha256": "78efddc6afe1f8446974d7f142e7c59563c6c0192e58ed0bea1accd23447b54b",
+  "transcript": {
+    "start": 102.12,
+    "end": 103.96,
+    "text": "Never gonna give you up"
+  },
+  "transcript_source": "faster-whisper small, int8, VAD disabled for music; word-timed excerpt from video seconds 95\u2013108",
+  "frame_source": "ctxr.cli.extract_frames; scene=0.05; min_gap=10; every=None",
+  "alignment": "ctxr.cli.align, unchanged",
+  "rendering": "ctxr.cli.render; one selected frame and five-word transcript excerpt",
+  "ctxr_revision": "c8c721e82e4273474a9f8dea55a15fd43f19b26e",
+  "image_treatment": "Original extracted frame embedded; only black pillarboxes clipped by SVG viewBox."
+}

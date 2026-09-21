@@ -1,66 +1,54 @@
-# ctxr brand assets
+# Brand assets
 
-A video frame opens along a diagonal cut into three text strokes. That cut passes through the custom x and divides the compositions, connecting the small mark to the full identity.
+ctxr uses a wordmark-only logo. Preserve the custom split x; do not add a separate symbol.
 
-## Palette
+## Colors and type
 
 | Color | Hex | Use |
 | --- | --- | --- |
-| Persimmon | `#C65336` | Mark, standalone lockup and small accents |
-| Ink | `#242722` | Text on paper; dark fields |
-| Paper | `#F4EEDF` | Light fields; text on ink |
+| Carbon | `#151714` | Dark backgrounds and text on light surfaces |
+| Chalk | `#F5F7F2` | Light backgrounds and text on dark surfaces |
+| Citron | `#C4F25A` | Wordmark on dark surfaces, timestamp and app icon |
 
-The same colors appear in both layouts. Ink/paper contrast is 13.07:1. Persimmon is 3.87:1 against paper and 3.38:1 against ink: use it for marks and large graphics, not small body text. SVGs use exact colors; rasters add antialiased edge colors.
+Use carbon text on citron. Do not use citron for small text on chalk. The video frame retains its original colors.
 
-## Typography
+The wordmark uses **Azeret Mono 650**, optical spacing and a custom cut through the x. Supporting copy uses weights 400 and 500. Every SVG letter is outlined, so the artwork needs no installed font. The unchanged [font](source/AzeretMono.ttf) is from [Displaay / Azeret](https://github.com/displaay/Azeret), under [SIL OFL 1.1](FONT-LICENSE.txt).
 
-**Azeret Mono**, weights 400, 500 and 600, by the Azeret Project Authors, is licensed under the **SIL Open Font License 1.1**. The unmodified variable font is included at [source/AzeretMono.ttf](source/AzeretMono.ttf); its license is [FONT-LICENSE.txt](FONT-LICENSE.txt). Source: [Google Fonts' Azeret Mono distribution](https://github.com/google/fonts/tree/main/ofl/azeretmono), upstream [Displaay / Azeret](https://github.com/displaay/azeret).
+## Files
 
-The wordmark uses the 600 weight for c, t and r, with optical advances in place of fixed character spacing. Its x is original vector geometry: one continuous diagonal passes between two separated strokes. All lettering in every SVG is outlined to paths; no font installation or external resource is needed to display the artwork. The bundled font is unmodified; the custom x exists only in the artwork.
-
-## Files and production
-
-| File | Size | How it was made / use |
+| Asset | Vector | Raster |
 | --- | --- | --- |
-| [logo.svg](logo.svg) | 360 × 96 | Original cut-frame geometry and outlined custom wordmark; transparent, single-color persimmon |
-| [logo-mark.svg](logo-mark.svg) | 96 × 96 | Original vector mark; transparent |
-| [logo-512.png](logo-512.png) | 512 × 137 | Local CairoSVG export of the lockup |
-| [logo-1024.png](logo-1024.png) | 1024 × 273 | Local CairoSVG export of the lockup |
-| [logo-mark-512.png](logo-mark-512.png) | 512 × 512 | Local CairoSVG export of the mark |
-| [logo-mark-1024.png](logo-mark-1024.png) | 1024 × 1024 | Local CairoSVG export of the mark |
-| [social-preview.png](social-preview.png) | 1280 × 640 | Locally drawn, outlined SVG composition rasterized with CairoSVG |
-| [banner.png](banner.png) | 1600 × 400 | Wide composition of the same system, rasterized with CairoSVG |
-| [icon.png](icon.png) | 512 × 512 | Mark on an opaque paper ground, locally rasterized for dependable display on arbitrary backgrounds |
-| [favicon.ico](favicon.ico) | 16, 24, 32, 48, 64, 128, 256 | Seven embedded sizes, encoded locally with Pillow from the icon |
-| [source/social-preview.svg](source/social-preview.svg), [source/banner.svg](source/banner.svg) | Native export sizes | Self-contained vector masters, including every outlined text element |
-| [source/walkthrough.md](source/walkthrough.md) | Markdown | Example emitted by the actual `ctxr.cli.render` function using a synthetic fixture |
-| [source/frames/0005_00m32s.jpg](source/frames/0005_00m32s.jpg) | 1280 × 608 | Locally rendered Markdown specimen for the illustrative walkthrough's image reference |
-| [generate.py](generate.py) | Python | Reproducible geometry, typesetting, rasterization and export checks |
-| [CRITIQUE.md](CRITIQUE.md) | Markdown | Critique of the first identity, written before this redesign |
+| Carbon wordmark | [logo.svg](logo.svg) | [512 px](logo-512.png), [1024 px](logo-1024.png) |
+| Chalk wordmark | [logo-dark.svg](logo-dark.svg) | [512 px](logo-dark-512.png), [1024 px](logo-dark-1024.png) |
+| Citron wordmark | [logo-accent.svg](logo-accent.svg) | [512 px](logo-accent-512.png), [1024 px](logo-accent-1024.png) |
+| Dark README banner | [banner.svg](banner.svg) | [banner.png](banner.png), 1600 × 400 |
+| Light README banner | [banner-light.svg](banner-light.svg) | [banner-light.png](banner-light.png), 1600 × 400 |
+| Dark social preview | [social-preview.svg](social-preview.svg) | [social-preview.png](social-preview.png), 1280 × 640 |
+| Light social preview | [social-preview-light.svg](social-preview-light.svg) | [social-preview-light.png](social-preview-light.png), 1280 × 640 |
+| App icon | [icon.svg](icon.svg) | [icon.png](icon.png), 512 × 512 |
+| Favicon | [favicon.svg](favicon.svg) | [32 px PNG](favicon.png), [multi-size ICO](favicon.ico) |
 
-## Walkthrough provenance
+The README switches banners with the reader's color scheme. GitHub's repository social-preview setting uses `social-preview.png`; changing the file alone does not update that setting. Upload it under Settings → General → Social preview.
 
-The card and banner show an excerpt of **ctxr's own Markdown output**, not a third-party application or a film still. The heading, timestamp/watch syntax, image reference and narration come from the actual renderer; the specimen omits the explanatory paragraph between the walkthrough heading and the first section. Only typography and line wrapping change.
+Use the wordmark at least 80 px wide outside favicon slots. The full wordmark is retained in favicons; prefer 32 px where supported. Keep its aspect ratio and surrounding clear space.
 
-This is an **illustrative self-demo**, labeled in both images. `00:32` is a fixture timestamp, `VIDEOID` is a neutral placeholder, and “The folder is the state; there is no database.” is taken verbatim from [docs/MCP.md](../docs/MCP.md). It is not presented as narration recovered from a real recording. The example frame is a locally rendered Markdown specimen, not a captured video frame. No third-party screenshots, film assets, stock icons or textures are used.
+## Authentic sample and rights
 
-## Reproduce
+The card and banner contain a real frame from the [original Rickroll video](https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=100), extracted by ctxr at 100.04 seconds and displayed as `01:40`. The five-word lyric excerpt begins at 102.12 seconds and is assigned to that frame by ctxr's unchanged alignment function. The frame was selected with the default scene-change threshold and interval. See [sample metadata](source/sample.json) and [original extracted JPEG](source/frame.jpg).
 
-The exports were produced with CairoSVG 2.9.1, fontTools 4.65.0 and Pillow 12.3.0 in a uv virtual environment. These are artwork tools, not ctxr runtime dependencies. Cairo must be installed locally.
+YouTube captions were rate-limited for this extraction. Local transcription used the small Whisper model with speech detection disabled for the music excerpt. The compositions change typography and clip only the black pillarboxes; the video picture is not synthesized or retouched. SVGs embed the JPEG directly.
+
+Original identity geometry and compositions use the repository's MIT license. The font keeps its OFL license. The Rick Astley frame and lyric remain third-party material and are excluded from the MIT grant; no open license or endorsement is claimed for them.
+
+## Reproduce and check
+
+Artwork dependencies are separate from ctxr runtime dependencies. Install Cairo locally, then:
 
 ```sh
 uv venv /tmp/ctxr-brand-venv
 uv pip install --python /tmp/ctxr-brand-venv/bin/python cairosvg==2.9.1 fonttools==4.65.0 pillow==12.3.0
-DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib /tmp/ctxr-brand-venv/bin/python assets/generate.py
-DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib /tmp/ctxr-brand-venv/bin/python assets/generate.py --check
+/tmp/ctxr-brand-venv/bin/python assets/generate.py
+/tmp/ctxr-brand-venv/bin/python assets/check.py
 ```
 
-The environment prefix above locates Homebrew Cairo on Apple Silicon. Omit it where Cairo is already on the library search path. Generation runs entirely locally and does not download videos. Font outlines use [fontTools SVGPathPen](https://fonttools.readthedocs.io/en/latest/pens/svgPathPen.html); raster exports use [CairoSVG](https://cairosvg.org/documentation/).
-
-## Use and limits
-
-Use the mark at 32 px and above; use the paper-backed ICO for favicon slots. Leave at least one mark stroke of clear space. Preserve the lockup's proportions: PNG filenames specify width, not a square canvas. SVG fills can be changed to ink on light backgrounds or paper on dark backgrounds for monochrome use.
-
-Both compositions keep the name and tagline primary. The Markdown excerpt is detail for larger displays and cannot remain fully readable when the 1600 px banner is reduced to a narrow phone width. README.md repeats the tagline as selectable text.
-
-The original artwork follows the repository's MIT license; the font retains its OFL license. README.md already references `banner.png`. `social-preview.png` is ready to upload in the repository's social preview settings; no upload is performed by the generator.
+On Apple Silicon, prefix the generator command with `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` if Cairo is not on the library search path. Generation is local and uses the bundled font and frame; it does not download video or call a model.
