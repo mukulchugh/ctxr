@@ -20,10 +20,10 @@ READ_ONLY = ToolAnnotations(read_only_hint=True, idempotent_hint=True)
 INSTRUCTIONS = """ctxr turns videos (YouTube, Vimeo, Loom, Wistia, X, TikTok, direct links, local files) into context an agent can read: per video, a transcript, frames where the
 screen changed, and a walkthrough that puts each frame next to what was being said.
 
-Typical flow: ctxr_process (one video, a playlist, or every video on a page) -> ctxr_index to see what exists ->
-ctxr_search / ctxr_walkthrough / ctxr_frame to read it. For more than a handful of videos pass background=true and
+Typical flow: ctxr_find (search YouTube or list a channel/playlist) -> ctxr_process (urls, local files, a playlist, or
+every video on a page) -> ctxr_index to see what exists -> ctxr_search / ctxr_walkthrough / ctxr_frame to read it. For more than a handful of videos pass background=true and
 poll ctxr_status; YouTube rate-limits, so a page of 70 videos takes about an hour. The learn_from_videos prompt is a
-ready-made study plan over a processed folder."""
+ready-made study plan over a processed folder; skill_from_videos turns one into an installable SKILL.md."""
 
 mcp = MCPServer("ctxr", instructions=INSTRUCTIONS, version=cli.__version__)
 
@@ -54,6 +54,15 @@ class Hit(BaseModel):
     text: str
     frame: str
     watch: str
+    score: float = 0
+
+
+class Found(BaseModel):
+    url: str
+    title: str | None
+    duration_s: int | None
+    channel: str | None
+    views: int | None
 
 
 class ProcessResult(BaseModel):
@@ -207,23 +216,21 @@ def ctxr_frame(video: str, t: float, out: str | None = None) -> Image:
     return Image(path=d / "frames" / frames[-1]["file"])
 
 
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True))
+def ctxr_find(query: str, limit: int = 10) -> list[Found]:
+    """Find videos to process without downloading anything: a search phrase runs a YouTube search; a channel or
+    playlist url lists its videos. Returns url, title, duration, channel and view count; pass the urls to
+    ctxr_process."""
+    return [Found(url=f["url"], title=f["title"], duration_s=f["duration"], channel=f["channel"], views=f["views"]) for f in cli.find_videos(query, limit)]
+
+
 @mcp.tool(annotations=READ_ONLY)
 def ctxr_search(query: str, out: str | None = None, limit: int = 20) -> list[Hit]:
-    """Find where something is said across all processed videos. Case-insensitive substring match over the
-    transcripts; each hit gives the video, timestamp, sentence, the frame on screen, and a link to that second
-    of the source."""  # ponytail: substring scan over a few hundred transcripts is instant; add ranking if corpora grow
-    o = _out(out)
-    q = query.lower()
-    hits = []
-    for d, m in _manifests(o):
-        for f in m["frames"]:
-            for s in f["segments"]:
-                if q in s["text"].lower():
-                    hits.append(Hit(video=m["id"], title=m.get("title") or m["id"], t=s["start"], timestamp=cli.fmt_ts(s["start"]),
-                                    text=s["text"], frame=str(d / "frames" / f["file"]), watch=cli.watch_url(m["url"], s["start"]) or m["url"]))
-                    if len(hits) >= limit:
-                        return hits
-    return hits
+    """Find where something is said across all processed videos. Full-text search with ranking (all terms first,
+    then any term); each hit gives the video, timestamp, sentence, the frame on screen, a link to that second of
+    the source, and a relevance score."""
+    return [Hit(video=h["video"], title=h["title"], t=h["t"], timestamp=cli.fmt_ts(h["t"]), text=h["text"], frame=h["frame"],
+                watch=cli.watch_url(h["url"], h["t"]) or h["url"], score=h["score"]) for h in cli.search(_out(out), query, limit)]
 
 
 @mcp.prompt()
@@ -239,6 +246,17 @@ For each video: call ctxr_walkthrough to read it section by section (each sectio
 Keep notes per video: what the feature is, the problem it solves, the exact steps shown with UI labels as they appear in the frames, the end result, and any limits mentioned. Cite the video title and timestamp for anything specific. Use ctxr_search to find where a term is discussed across videos.
 
 When done, produce: (1) a feature map grouped by product area with links to the demos that cover each feature, (2) a glossary of the terms {product} uses in its own wording, (3) factual observations on how {product} runs a demo (length, structure, how they show before and after). Do not invent details that are not in the frames or transcripts; if something is unclear, say so and point to the timestamp."""
+
+
+@mcp.prompt()
+def skill_from_videos(topic: str, out: str | None = None) -> str:
+    """Turn a folder of processed tutorial or demo videos into an installable agent skill (a SKILL.md)."""
+    o = _out(out)
+    return f"""Turn the videos processed with ctxr in {o} into one agent skill about {topic}, as a SKILL.md file another agent can install and follow.
+
+Call ctxr_index to list the videos, then study each with ctxr_walkthrough (section by section) and ctxr_frame on the sections that show something on screen. Frames are ground truth for what is shown; narration explains why. Use ctxr_search to find where a term or step is covered across videos.
+
+Write the skill in the Agent Skills format: YAML frontmatter with `name` (kebab-case) and `description` (one sentence saying what the skill does and when to use it), then Markdown with these sections: When to use; Prerequisites; Steps (numbered, each step concrete enough to act on, with the exact UI labels, commands or code shown, and a citation like "Video title, 01:40"); Pitfalls and limits the presenters mention or that the frames reveal; Verification (how the agent knows it worked); References (one line per source video with its url). Drop sponsor segments, filler and self-promotion. Keep only what the videos actually show or say; if something is unclear, say so with the timestamp rather than guessing. Plain language."""
 
 
 def main():

@@ -54,10 +54,23 @@ def ids_from_page(url):
     return ids_from_html(urllib.request.urlopen(req, timeout=60).read().decode("utf-8", "replace"))
 
 
+def find_videos(query, limit=10):
+    """Candidates for a search phrase (YouTube search) or a channel/playlist url, without downloading anything."""
+    target = query if re.match(r"https?://", query) else f"ytsearch{limit}:{query}"
+    out = subprocess.run(YTDLP + ["--flat-playlist", "-j", "--playlist-end", str(limit), target], capture_output=True, text=True, check=True).stdout
+    found = []
+    for l in out.splitlines():
+        if not l.strip():
+            continue
+        e = json.loads(l)
+        found.append({"id": e.get("id"), "url": e.get("url") or e.get("webpage_url") or e.get("id"), "title": e.get("title"),
+                      "duration": int(e["duration"]) if e.get("duration") else None, "channel": e.get("channel") or e.get("uploader"),
+                      "views": e.get("view_count"), "upload_date": e.get("upload_date")})
+    return found[:limit]
+
+
 def ids_from_playlist(url):
-    out = subprocess.run(YTDLP + ["--flat-playlist", "-j", url], capture_output=True, text=True, check=True).stdout
-    entries = [json.loads(l) for l in out.splitlines() if l.strip()]
-    return [e.get("url") or e["id"] for e in entries]
+    return [f["url"] for f in find_videos(url, limit=10000)]
 
 
 def parse_item(s):
@@ -417,6 +430,43 @@ Transcripts are automatic (YouTube captions or Whisper), so expect occasional mi
     return len(rows)
 
 
+# ---------- search ----------
+def search_index(out):
+    """SQLite FTS5 index over every transcript segment in out, rebuilt when a manifest is newer than the index."""
+    import sqlite3
+    db = out / "ctxr.sqlite"
+    manifests = list(out.glob("*/manifest.json"))
+    fresh = db.exists() and all(m.stat().st_mtime <= db.stat().st_mtime for m in manifests)
+    con = sqlite3.connect(db)
+    if fresh:
+        return con
+    con.executescript("DROP TABLE IF EXISTS seg; CREATE VIRTUAL TABLE seg USING fts5(video, title, url, t UNINDEXED, frame UNINDEXED, text, tokenize='porter unicode61');")
+    rows = []
+    for mf in manifests:
+        m = json.loads(mf.read_text())
+        for f in m["frames"]:
+            for sgm in f["segments"]:
+                rows.append((m["id"], m.get("title") or m["id"], m.get("url") or "", sgm["start"], str(mf.parent / "frames" / f["file"]), sgm["text"]))
+    con.executemany("INSERT INTO seg VALUES (?,?,?,?,?,?)", rows)
+    con.commit()
+    return con
+
+
+def search(out, query, limit=20):
+    """Ranked hits (bm25) for a query across all processed videos; every term must match, else any term."""
+    con = search_index(out)
+    terms = [t for t in re.findall(r"[\w']+", query) if t]
+    if not terms:
+        return []
+    for joiner in (" ", " OR "):
+        q = joiner.join(f'"{t}"' for t in terms)
+        cur = con.execute("SELECT video, title, url, t, frame, text, bm25(seg) FROM seg WHERE seg MATCH ? ORDER BY bm25(seg) LIMIT ?", (q, limit))
+        hits = [{"video": v, "title": ti, "url": u, "t": t, "frame": fr, "text": tx, "score": round(-sc, 3)} for v, ti, u, t, fr, tx, sc in cur]
+        if hits:
+            return hits
+    return []
+
+
 def self_test():
     frames = [{"t": 0.0, "file": "a.jpg"}, {"t": 10.0, "file": "b.jpg"}, {"t": 25.0, "file": "c.jpg"}]
     segs = [{"start": 0.5, "end": 3, "text": "one"}, {"start": 9.9, "end": 12, "text": "two"},
@@ -449,6 +499,14 @@ def self_test():
         srt.write_text("1\n01:00:00,000 --> 01:00:01,000\nan hour in\n\n2\n01:00:01,000 --> 01:00:02,000\n\n")
         assert captions_srt_vtt(srt) == [{"start": 3600.0, "end": 3601.0, "text": "an hour in"}]
         assert [p.name for p in rank_captions([srt, v, j])] == ["abcdefghijk.en-orig.json3", "v.en.vtt", "v.srt"]
+        out = Path(td) / "out"; (out / "2026-01-01-demo-abcdefghijk").mkdir(parents=True)
+        (out / "2026-01-01-demo-abcdefghijk" / "manifest.json").write_text(json.dumps({"id": "abcdefghijk", "title": "Demo", "url": "https://youtu.be/abcdefghijk",
+            "frames": [{"t": 0, "file": "a.jpg", "segments": [{"start": 1, "end": 2, "text": "Convert to workbook, then drag the chart."}]},
+                       {"t": 10, "file": "b.jpg", "segments": [{"start": 11, "end": 12, "text": "Charts render instantly."}]}]}))
+        hits = search(out, "convert workbook")
+        assert len(hits) == 1 and hits[0]["t"] == 1 and hits[0]["frame"].endswith("a.jpg"), hits
+        assert sorted(h["t"] for h in search(out, "chart")) == [1, 11], search(out, "chart")  # porter stemming: chart matches charts
+        assert search(out, "nothing matches here") == [] and search(out, "!!!") == []
     vp = vocab_prompt({"channel": "Quivly AI", "title": "Week 7 - Quivly MCP - 12 weeks of spring shipping \U0001F338"}, "Claude, Salesforce,\nQuivly")
     assert vp == "Quivly AI, Week 7 - Quivly MCP - 12 weeks of spring shipping, Claude, Salesforce, Quivly", vp
     md = render("abcdefghijk", {"title": "T", "upload_date": "20260921", "duration": 40}, "youtube", a)
@@ -474,11 +532,21 @@ def main():
     ap.add_argument("--cookies-from-browser", default=None, metavar="BROWSER", help="let yt-dlp use your browser login (chrome, firefox, safari, ...) for sites that require it, such as Vimeo")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--find", metavar="QUERY", help="list candidate videos for a search phrase or a channel/playlist url (no download) and exit")
+    ap.add_argument("--search", metavar="QUERY", help="search the transcripts already in --out and exit")
     ap.add_argument("--cooldown", type=float, default=5, help="seconds to pause after each video, on top of yt-dlp's sleep preset")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
     if args.self_test:
         return self_test()
+    if args.find:
+        for f in find_videos(args.find, args.limit or 10):
+            print(json.dumps(f))
+        return 0
+    if args.search:
+        for h in search(Path(args.out).expanduser(), args.search, args.limit or 20):
+            print(f"{h['title'][:50]:50} {fmt_ts(h['t'])}  {h['text'][:100]}")
+        return 0
     if not shutil.which("ffmpeg"):
         sys.exit("ffmpeg not found on PATH (brew install ffmpeg / apt install ffmpeg)")
 

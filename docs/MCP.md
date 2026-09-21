@@ -10,13 +10,15 @@ Two different jobs: turning videos into context (slow, minutes to an hour, netwo
 
 | Primitive | Name | Why |
 |---|---|---|
+| tool | `ctxr_find` | Search YouTube or list a channel or playlist through yt-dlp, nothing downloaded, so the agent can go from a topic to a corpus on its own. |
 | tool | `ctxr_process` | Ingest urls from any yt-dlp site, YouTube ids, local files, a playlist, or every video on a page. Inline for a few videos with per-video progress notifications; `background: true` returns immediately for big batches; `vocab` lists names local transcription must spell right; `whisper_model` picks the model; `proxy` routes requests through an HTTP/SOCKS proxy. |
 | tool | `ctxr_status` | Poll a background run: running flag (pid alive), videos done, failures, last log lines. Works in every MCP client today. |
 | tool | `ctxr_index` | What is processed, as structured rows (id, title, date, duration, frames, transcript source, folder). |
-| tool | `ctxr_search` | Where is X said, across all videos. Returns sentence, timestamp, the frame on screen, and a YouTube link at that second. |
+| tool | `ctxr_search` | Where is X said, across all videos. SQLite FTS5 with porter stemming and bm25 ranking; returns sentence, timestamp, the frame on screen, a link to that second, and a score. |
 | tool | `ctxr_walkthrough` | One video, section by section, with `start`/`end` so a 12-minute video can be read in windows. |
 | tool | `ctxr_frame` | The screen at second t, returned as image content so the model can look at the UI. |
 | prompt | `learn_from_videos` | The study plan, parameterized by product and folder. |
+| prompt | `skill_from_videos` | Turns a processed corpus into an installable SKILL.md in the Agent Skills format. |
 
 Every read tool is annotated `read_only_hint` and `idempotent_hint`, so hosts can auto-approve them; `ctxr_process` is marked `open_world_hint` because it downloads from YouTube. Results are typed Pydantic models, so clients get an output schema and `structuredContent`, not prose to parse.
 
@@ -27,7 +29,7 @@ Every read tool is annotated `read_only_hint` and `idempotent_hint`, so hosts ca
 - **Progress notifications for inline runs.** `ctx.report_progress(i, n, message)` after each video keeps the host from timing out and shows the agent what is happening.
 - **stdio by default.** Hosts launch `ctxr-mcp` as a subprocess; nothing to deploy. The SDK's `run(transport="streamable-http")` is one argument away if a shared server is ever wanted. Nothing is printed to stdout because stdout is the wire; logs go to stderr.
 - **One output folder per corpus.** `out` per call, else `$CTXR_OUT`, else `~/ctxr`. The folder is the state; there is no database. Rerunning is safe because finished videos are skipped.
-- **Substring search.** A scan over a few hundred transcripts is instant. Ranking (BM25 or embeddings) can be added when a corpus is large enough to need it.
+- **Full-text search, no embeddings.** SQLite's FTS5 (in the standard library) indexes every segment with porter stemming and bm25 ranking; the index lives next to the corpus and rebuilds when a manifest changes. Embeddings would add a model and a store for little gain at this size.
 
 ## Multi-harness
 

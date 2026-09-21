@@ -100,6 +100,8 @@ Options:
 | `--cookies-from-browser BROWSER` | off | Let yt-dlp use your browser login (chrome, firefox, safari) for sites that require it |
 | `--keep-video` | off | Keep the downloaded mp4 next to the frames |
 | `--force` | off | Redo folders that already have a manifest |
+| `--find QUERY` | | List candidate videos for a search phrase or a channel/playlist url, as JSON lines, and exit. Nothing is downloaded |
+| `--search QUERY` | | Ranked full-text search over the transcripts already in `--out`, and exit |
 | `--self-test` | | Run the built-in check and exit |
 
 A folder that already has `manifest.json` is skipped, so an interrupted batch resumes where it stopped.
@@ -112,6 +114,7 @@ A folder that already has `manifest.json` is skipped, so an interrupted batch re
 4. **Frames.** One ffmpeg pass with a scene-change filter, a 1.5 second debounce so a transition does not produce a burst, and a floor of one frame every `--min-gap` seconds. Frame count scales with how much the picture changes, not with frame rate.
 5. **Align.** Each transcript segment is placed under the last frame shown at or before the segment starts.
 6. **Write.** README.md, manifest.json, transcript files per video, then INDEX.md, ALL-DEMOS.md and an agent-facing README.md at the root.
+7. **Search.** `--search` and the `ctxr_search` tool build a SQLite full-text index (`ctxr.sqlite` in the output folder, porter stemming, bm25 ranking) from the manifests and rebuild it when a manifest is newer. All terms must match; if nothing does, any term.
 
 ## Rate limits
 
@@ -127,7 +130,7 @@ The root README.md tells an agent how to read the folder. A ready-to-use prompt 
 
 ctxr ships as an MCP server and as a skill, so an agent can run the whole workflow itself and then query the result in small pieces instead of reading 400 KB of Markdown.
 
-**MCP tools** (`ctxr-mcp`, stdio): `ctxr_process` (ids, a playlist, or every video on a page; `background: true` for big batches), `ctxr_status`, `ctxr_index`, `ctxr_search` (where is X said, with the frame on screen and a link to that second), `ctxr_walkthrough` (one video, section by section, with a time window), `ctxr_frame` (the screen at second t, as an image), and a `learn_from_videos` prompt. Design notes: [docs/MCP.md](docs/MCP.md).
+**MCP tools** (`ctxr-mcp`, stdio): `ctxr_find` (search YouTube or list a channel or playlist, nothing downloaded), `ctxr_process` (urls, local files, a playlist, or every video on a page; `background: true` for big batches), `ctxr_status`, `ctxr_index`, `ctxr_search` (ranked full-text search across every transcript, with the frame on screen and a link to that second), `ctxr_walkthrough` (one video, section by section, with a time window), `ctxr_frame` (the screen at second t, as an image), and two prompts: `learn_from_videos` (a study plan) and `skill_from_videos` (turn a corpus into an installable SKILL.md). Design notes: [docs/MCP.md](docs/MCP.md).
 
 Claude Code, as a plugin (skill + MCP server together):
 ```
