@@ -10,7 +10,7 @@ Two different jobs: turning videos into context (slow, minutes to an hour, netwo
 
 | Primitive | Name | Why |
 |---|---|---|
-| tool | `ctxr_process` | Ingest ids, a playlist, or every video on a page. Inline for a few videos with per-video progress notifications; `background: true` returns immediately for big batches; `proxy` routes requests through an HTTP/SOCKS proxy. |
+| tool | `ctxr_process` | Ingest urls from any yt-dlp site, YouTube ids, local files, a playlist, or every video on a page. Inline for a few videos with per-video progress notifications; `background: true` returns immediately for big batches; `proxy` routes requests through an HTTP/SOCKS proxy. |
 | tool | `ctxr_status` | Poll a background run: running flag (pid alive), videos done, failures, last log lines. Works in every MCP client today. |
 | tool | `ctxr_index` | What is processed, as structured rows (id, title, date, duration, frames, transcript source, folder). |
 | tool | `ctxr_search` | Where is X said, across all videos. Returns sentence, timestamp, the frame on screen, and a YouTube link at that second. |

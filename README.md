@@ -8,6 +8,8 @@
 
 **Context from video, for agents.**
 
+Give it a video url, a local file, a playlist, or a page full of embedded demos and it produces a folder per video plus an index over all of them: the transcript, the frames where the screen changed, and one Markdown walkthrough that puts each frame next to the words spoken while it was on screen. YouTube, Vimeo, Loom, Wistia, X, TikTok, Google Drive and Dropbox share links, direct mp4/m3u8 links and any other site yt-dlp supports all go through the same path.
+
 [Install](#install) · [Usage](#usage) · [Agent setup](#use-it-from-an-agent) · [Brand assets](assets/README.md)
 
 ctxr turns YouTube videos into Markdown walkthroughs for AI agents. It keeps the frames where the screen changes and pairs each one with the words spoken while it was on screen.
@@ -64,10 +66,23 @@ Or run it without installing: `uvx --from "ctxr @ git+https://github.com/mukulch
 
 ```
 ctxr https://youtu.be/VIDEOID                           # one video
+ctxr https://vimeo.com/123456789 https://www.loom.com/share/abc…   # other platforms, same output
+ctxr https://cdn.example.com/talk.mp4                   # a direct media link
+ctxr ~/Videos/demo.mov                                  # a local file (demo.srt or demo.vtt next to it is used as captions)
 ctxr --playlist https://www.youtube.com/playlist?list=… # every video in a playlist or channel
-ctxr --page https://example.com/product/demos           # every YouTube video embedded on a page
+ctxr --page https://example.com/product/demos           # every video embedded on a page
 ctxr --page URL --out ./docs --limit 5                  # try the first five first
 ```
+
+| Input | How ctxr handles it |
+|---|---|
+| YouTube id or url | yt-dlp download; captions in the same call; youtube-transcript-api as a one-shot fallback |
+| Vimeo, Loom, Wistia, X, TikTok, Dailymotion, Streamable, Google Drive, Dropbox, any yt-dlp site | yt-dlp download; the site's captions (vtt or srt) if it has them |
+| Direct mp4, webm, mov or m3u8 link | yt-dlp download of the file or stream |
+| Local mp4, mov, mkv, webm, m4v or avi | used in place, never copied; a sidecar `name.srt` or `name.vtt` is used as captions |
+| Anything without captions | local Whisper |
+
+Each walkthrough section links to that second on the source (YouTube `?t=`, Vimeo `#t=`, Loom `?t=`, the standard media fragment `#t=` elsewhere); local files get the timestamp only. Some sites only serve logged-in clients (Vimeo did at the time of writing); pass `--cookies-from-browser chrome` (or firefox, safari) and yt-dlp uses your browser session.
 
 Options:
 
@@ -80,6 +95,7 @@ Options:
 | `--whisper-all` | off | Transcribe locally even when YouTube captions exist (cleaner punctuation) |
 | `--cooldown 5` | 5 | Pause after each video. See rate limits below |
 | `--proxy URL` | off | HTTP, HTTPS or SOCKS proxy for yt-dlp and the caption client, for example a rotating residential gateway |
+| `--cookies-from-browser BROWSER` | off | Let yt-dlp use your browser login (chrome, firefox, safari) for sites that require it |
 | `--keep-video` | off | Keep the downloaded mp4 next to the frames |
 | `--force` | off | Redo folders that already have a manifest |
 | `--self-test` | | Run the built-in check and exit |
@@ -88,9 +104,9 @@ A folder that already has `manifest.json` is skipped, so an interrupted batch re
 
 ## How it works
 
-1. **Find the videos.** `--page` fetches the page and pulls every YouTube id out of `watch?v=`, `youtu.be/`, `/embed/` and `i.ytimg.com/vi/` thumbnail links, in page order. `--playlist` asks yt-dlp for the flat list.
-2. **Download.** yt-dlp fetches a 720p mp4 and the metadata JSON. The mp4 is deleted after the frames are cut unless you pass `--keep-video`.
-3. **Transcript.** English captions come back in the same yt-dlp call as json3, so most videos cost no extra requests. If none were written, youtube-transcript-api is asked once; after the first block from YouTube it is not asked again for the rest of the run. If there are still no captions, or you pass `--whisper-all`, ffmpeg extracts 16 kHz mono audio and faster-whisper (small model, runs locally) transcribes it. The manifest records which source was used: `youtube`, `youtube-transcript-api` or `whisper-small`.
+1. **Find the videos.** `--page` fetches the page and pulls out every YouTube id (`watch?v=`, `youtu.be/`, `/embed/`, `/shorts/`, `i.ytimg.com/vi/` thumbnails), Vimeo, Loom and Wistia embeds, and direct media `src` links, in page order. `--playlist` asks yt-dlp for the flat list of any playlist or channel.
+2. **Download.** yt-dlp fetches a 720p mp4 and the metadata JSON from any supported site or direct link. Local files are used where they are. The downloaded mp4 is deleted after the frames are cut unless you pass `--keep-video`.
+3. **Transcript.** English captions come back in the same yt-dlp call (json3 on YouTube, vtt or srt elsewhere; a sidecar file for local videos), so most videos cost no extra requests. For YouTube only, if none were written, youtube-transcript-api is asked once; after the first block it is not asked again for the rest of the run. If there are still no captions, or you pass `--whisper-all`, ffmpeg extracts 16 kHz mono audio and faster-whisper (small model, runs locally) transcribes it. The manifest records which source was used: `captions`, `youtube-transcript-api`, `whisper-small`, or `none` for a video with no audio track (frames only).
 4. **Frames.** One ffmpeg pass with a scene-change filter, a 1.5 second debounce so a transition does not produce a burst, and a floor of one frame every `--min-gap` seconds. Frame count scales with how much the picture changes, not with frame rate.
 5. **Align.** Each transcript segment is placed under the last frame shown at or before the segment starts.
 6. **Write.** README.md, manifest.json, transcript files per video, then INDEX.md, ALL-DEMOS.md and an agent-facing README.md at the root.
@@ -141,7 +157,7 @@ The output folder for MCP calls is `out` per call, else `$CTXR_OUT`, else `~/ctx
 
 - Captions are automatic (YouTube or Whisper), so product names can be misheard. The frames are the ground truth for UI labels.
 - A short burst of screen changes can produce frames with no narration under them. They are kept and marked, because the frame usually shows the result of the previous action.
-- Only YouTube for now. Local files and other platforms are a small change away since everything after the download is source-agnostic.
+- Sources that need a login work only with `--cookies-from-browser`; DRM streams are out of scope. Audio-only feeds will probably work but are untested.
 
 ## Brand assets
 

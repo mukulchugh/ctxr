@@ -17,7 +17,7 @@ from . import cli
 log = logging.getLogger("ctxr.mcp")
 READ_ONLY = ToolAnnotations(read_only_hint=True, idempotent_hint=True)
 
-INSTRUCTIONS = """ctxr turns YouTube videos into context an agent can read: per video, a transcript, frames where the
+INSTRUCTIONS = """ctxr turns videos (YouTube, Vimeo, Loom, Wistia, X, TikTok, direct links, local files) into context an agent can read: per video, a transcript, frames where the
 screen changed, and a walkthrough that puts each frame next to what was being said.
 
 Typical flow: ctxr_process (one video, a playlist, or every video on a page) -> ctxr_index to see what exists ->
@@ -107,7 +107,7 @@ def _resolve(items, page, playlist):
         ids += [(v, page) for v in cli.ids_from_page(page)]
     if playlist:
         ids += [(v, playlist) for v in cli.ids_from_playlist(playlist)]
-    ids += [(cli.parse_id(s), None) for s in items or []]
+    ids += [(s, None) for s in items or []]
     seen = set()
     return [x for x in ids if not (x[0] in seen or seen.add(x[0]))]
 
@@ -124,8 +124,9 @@ async def ctxr_process(
     proxy: str | None = None,
     background: bool = False,
 ) -> ProcessResult:
-    """Turn YouTube videos into context. Give video ids/urls in items, a playlist or channel url, or a page url
-    (every YouTube video embedded on it is processed). Already-processed videos are skipped. Inline mode reports
+    """Turn videos into context. items takes YouTube ids or urls, urls from any site yt-dlp supports (Vimeo, Loom,
+    Wistia, X, TikTok, Google Drive, Dropbox, direct mp4/m3u8 links) and local video file paths; playlist takes a
+    playlist or channel url; page takes a web page (every video embedded on it is processed). Already-processed videos are skipped. Inline mode reports
     progress per video and returns when done; background=true returns at once and ctxr_status reports progress
     (use it for more than ~5 videos). proxy routes yt-dlp and caption requests through an HTTP/SOCKS proxy."""
     o = _out(out)
@@ -203,8 +204,8 @@ def ctxr_frame(video: str, t: float, out: str | None = None) -> Image:
 @mcp.tool(annotations=READ_ONLY)
 def ctxr_search(query: str, out: str | None = None, limit: int = 20) -> list[Hit]:
     """Find where something is said across all processed videos. Case-insensitive substring match over the
-    transcripts; each hit gives the video, timestamp, sentence, the frame on screen, and a YouTube link at that
-    second."""  # ponytail: substring scan over a few hundred transcripts is instant; add ranking if corpora grow
+    transcripts; each hit gives the video, timestamp, sentence, the frame on screen, and a link to that second
+    of the source."""  # ponytail: substring scan over a few hundred transcripts is instant; add ranking if corpora grow
     o = _out(out)
     q = query.lower()
     hits = []
@@ -213,7 +214,7 @@ def ctxr_search(query: str, out: str | None = None, limit: int = 20) -> list[Hit
             for s in f["segments"]:
                 if q in s["text"].lower():
                     hits.append(Hit(video=m["id"], title=m.get("title") or m["id"], t=s["start"], timestamp=cli.fmt_ts(s["start"]),
-                                    text=s["text"], frame=str(d / "frames" / f["file"]), watch=f"{m['url']}?t={int(s['start'])}"))
+                                    text=s["text"], frame=str(d / "frames" / f["file"]), watch=cli.watch_url(m["url"], s["start"]) or m["url"]))
                     if len(hits) >= limit:
                         return hits
     return hits
