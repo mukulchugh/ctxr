@@ -8,9 +8,13 @@
 
 **Context from video, for agents.**
 
-ctxr turns a YouTube video into something an AI agent can actually learn from: the transcript, the frames where the screen changed, and one Markdown walkthrough that puts each frame next to the words spoken while it was on screen. Point it at a single video, a playlist, or a page full of embedded demos and it produces a folder per video plus an index over all of them.
+[Install](#install) · [Usage](#usage) · [Agent setup](#use-it-from-an-agent) · [Brand assets](assets/README.md)
 
-Think of it as Context7 for videos. Documentation is text, so agents can read it. Product demos, tutorials and talks are video, so they could not. ctxr closes that gap.
+ctxr turns YouTube videos into Markdown walkthroughs for AI agents. It keeps the frames where the screen changes and pairs each one with the words spoken while it was on screen.
+
+Give it a product demo, tutorial, talk, playlist, or page of embedded videos. You get timestamped frames, a transcript, and an index an agent can read and cite.
+
+## Quick start
 
 ```
 uv tool install "ctxr[whisper,mcp] @ git+https://github.com/mukulchugh/ctxr"
@@ -32,21 +36,17 @@ demos/
     frames/0007_01m23s.jpg  1280px frames, one per visible screen change
 ```
 
-A walkthrough reads like this. Every timestamp links to that second on YouTube.
+## A moment of video, as text
 
-```markdown
-### 00:22 ([watch](https://youtu.be/VIDEOID?t=22))
+The banner uses a real frame and transcript excerpt from the original Rickroll. This is the same pairing ctxr writes into a walkthrough; the timestamp links back to the video.
 
-![00:22](frames/0004_00m22s.jpg)
+### 01:40 ([watch](https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=100))
 
-all of these are crowded into the top left corner, and I want them spread evenly across the width
+<img src="assets/source/frame.jpg" alt="Rick Astley at the microphone in the original music video, at 01:40." width="480">
 
-### 00:32 ([watch](https://youtu.be/VIDEOID?t=32))
+> Never gonna give you up
 
-![00:32](frames/0005_00m32s.jpg)
-
-so I add a horizontal container and drop the three controls into it
-```
+[Sample provenance and extraction details](assets/source/sample.json)
 
 ## Install
 
@@ -143,6 +143,12 @@ The output folder for MCP calls is `out` per call, else `$CTXR_OUT`, else `~/ctx
 - A short burst of screen changes can produce frames with no narration under them. They are kept and marked, because the frame usually shows the result of the previous action.
 - Only YouTube for now. Local files and other platforms are a small change away since everything after the download is source-agnostic.
 
+## Brand assets
+
+[Wordmark SVG](assets/logo.svg) · [Dark-background wordmark](assets/logo-dark.svg) · [Social preview](assets/social-preview.png) · [App icon](assets/icon.png)
+
+The [asset guide](assets/README.md) includes light and dark banners, PNG exports, favicons, palette, typography, and reproduction instructions.
+
 ## License
 
-MIT
+[MIT](LICENSE). Azeret Mono uses the [SIL Open Font License 1.1](assets/FONT-LICENSE.txt). The video frame and lyric remain third-party material and are excluded from the MIT license. See the [asset guide](assets/README.md#authentic-sample-and-rights).
