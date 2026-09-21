@@ -36,6 +36,10 @@ VIDEO_EXT = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi"}
 _whisper = None
 
 
+class BotCheck(RuntimeError):
+    """YouTube's 'Sign in to confirm you're not a bot' block: IP-level, lasts hours, retries only make it worse."""
+
+
 # ---------- resolve links ----------
 def ids_from_html(html):
     """Every video a page embeds, in document order: YouTube ids, plus canonical urls for other platforms."""
@@ -127,6 +131,8 @@ def download(kind, ref, tmp, proxy=None, cookies_from_browser=None):
         if video and (tmp / "v.info.json").exists():
             break
         err = (r.stderr.strip().splitlines() or ["?"])[-1]
+        if "confirm you" in err and "not a bot" in err:
+            raise BotCheck("YouTube is asking this IP to sign in (bot check). Stop for a few hours, or pass --cookies-from-browser, or --proxy.")
         print(f"    download attempt {attempt + 1} failed: {err}")
     else:
         raise RuntimeError(f"yt-dlp failed after 4 attempts: {err}")
@@ -566,6 +572,10 @@ def main():
         print(f"[{i}/{len(ids)}] {vid}", flush=True)
         try:
             process(vid, out, args, page)
+        except BotCheck as e:  # ponytail: one bot check means every further download will fail too; stop the batch, keep what is done
+            failures += [(v, str(e)) for v, _ in ids[i - 1:]]
+            print(f"  STOPPED at {vid}: {e}", flush=True)
+            break
         except Exception as e:
             failures.append((vid, f"{type(e).__name__}: {e}")); print(f"  FAILED {vid}: {type(e).__name__}: {e}", flush=True)
         time.sleep(args.cooldown)

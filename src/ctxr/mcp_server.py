@@ -163,6 +163,9 @@ async def ctxr_process(
         await ctx.report_progress(i - 1, len(ids), f"{vid} ({i}/{len(ids)})")
         try:
             await anyio.to_thread.run_sync(cli.process, vid, o, args, src)
+        except cli.BotCheck as e:  # every further download would fail too; stop and report
+            failed += [f"{v}: {e}" for v, _ in ids[i - 1:]]
+            break
         except Exception as e:  # keep going; the agent sees which ids failed
             log.warning("%s failed: %s", vid, e)
             failed.append(f"{vid}: {type(e).__name__}: {e}")
