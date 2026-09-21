@@ -1,9 +1,9 @@
 # ctxr
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/banner.png?v=wordmark-citron">
-  <source media="(prefers-color-scheme: light)" srcset="assets/banner-light.png?v=wordmark-citron">
-  <img src="assets/banner-light.png?v=wordmark-citron" alt="ctxr: Context from video, for agents." width="1600">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mukulchugh/ctxr/e32c25446ea3dcf5aac1002049b666b302c3acfc/assets/banner.png">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/mukulchugh/ctxr/e32c25446ea3dcf5aac1002049b666b302c3acfc/assets/banner-light.png">
+  <img src="https://raw.githubusercontent.com/mukulchugh/ctxr/e32c25446ea3dcf5aac1002049b666b302c3acfc/assets/banner-light.png" alt="ctxr: Context from video, for agents." width="1600">
 </picture>
 
 **Context from video, for agents.**
