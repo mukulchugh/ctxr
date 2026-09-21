@@ -6,3 +6,4 @@ build/
 *.egg-info/
 ctxr-out/
 .DS_Store
+.impeccable/
