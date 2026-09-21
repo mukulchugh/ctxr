@@ -121,6 +121,8 @@ async def ctxr_process(
     out: str | None = None,
     limit: int | None = None,
     whisper_all: bool = False,
+    vocab: str | None = None,
+    whisper_model: str = "small",
     proxy: str | None = None,
     background: bool = False,
 ) -> ProcessResult:
@@ -128,7 +130,9 @@ async def ctxr_process(
     Wistia, X, TikTok, Google Drive, Dropbox, direct mp4/m3u8 links) and local video file paths; playlist takes a
     playlist or channel url; page takes a web page (every video embedded on it is processed). Already-processed videos are skipped. Inline mode reports
     progress per video and returns when done; background=true returns at once and ctxr_status reports progress
-    (use it for more than ~5 videos). proxy routes yt-dlp and caption requests through an HTTP/SOCKS proxy."""
+    (use it for more than ~5 videos). vocab is a comma-separated list of names (brands, products, people) that local
+    transcription must spell correctly; the channel and title are added automatically. whisper_model: small (default),
+    medium or large-v3 for harder audio. proxy routes yt-dlp and caption requests through an HTTP/SOCKS proxy."""
     o = _out(out)
     ids = _resolve(items, page, playlist)[:limit]
     if not ids:
@@ -136,13 +140,15 @@ async def ctxr_process(
     if background:
         cmd = [sys.executable, "-m", "ctxr.cli", "--out", str(o)] + (["--page", page] if page else []) + \
               (["--playlist", playlist] if playlist else []) + (items or []) + (["--limit", str(limit)] if limit else []) + \
-              (["--whisper-all"] if whisper_all else []) + (["--proxy", proxy] if proxy else [])
+              (["--whisper-all"] if whisper_all else []) + (["--proxy", proxy] if proxy else []) + \
+              (["--vocab", vocab] if vocab else []) + (["--whisper-model", whisper_model] if whisper_model != "small" else [])
         logf = o / "ctxr.log"
         proc = subprocess.Popen(cmd, stdout=open(logf, "ab"), stderr=subprocess.STDOUT, start_new_session=True)
         (o / "ctxr.pid").write_text(str(proc.pid))
         return ProcessResult(out=str(o), requested=len(ids), done=0, failed=[], background=True, log=str(logf),
                              note=f"started pid {proc.pid}; poll ctxr_status(out) until running is false")
-    args = argparse.Namespace(scene=0.05, min_gap=10, every=None, force=False, keep_video=False, whisper_all=whisper_all, proxy=proxy)
+    args = argparse.Namespace(scene=0.05, min_gap=10, every=None, force=False, keep_video=False, whisper_all=whisper_all, proxy=proxy,
+                              vocab=vocab, whisper_model=whisper_model)
     failed = []
     for i, (vid, src) in enumerate(ids, 1):
         await ctx.report_progress(i - 1, len(ids), f"{vid} ({i}/{len(ids)})")

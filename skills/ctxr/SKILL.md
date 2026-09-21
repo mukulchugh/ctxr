@@ -11,7 +11,8 @@ Requires `ffmpeg` on PATH and `uv`. Two ways to use it; prefer the MCP tools whe
 
 1. `ctxr_process` with `items` (video urls from any supported site, YouTube ids, or local file paths), `playlist`, or `page` (every video embedded on that page). Pass `background: true` for more than about 5 videos, then poll `ctxr_status` until `running` is false. Expect about one video per minute; ctxr paces itself to stay under YouTube's rate limits.
 2. `ctxr_index` lists what is processed. `ctxr_search` finds where something is said. `ctxr_walkthrough` reads one video section by section (use `start`/`end` seconds for a window of a long one). `ctxr_frame` shows the screen at a given second.
-3. The `learn_from_videos` prompt is a full study plan over a processed folder.
+3. When videos have no captions and are transcribed locally, pass `vocab` with the product, brand and people names that must be spelled right (for example "Quivly, Claude, Salesforce"); the channel and title are added automatically.
+4. The `learn_from_videos` prompt is a full study plan over a processed folder.
 
 ## With the CLI
 
@@ -21,7 +22,7 @@ uvx --from "ctxr[whisper] @ git+https://github.com/mukulchugh/ctxr" ctxr --playl
 uvx --from "ctxr[whisper] @ git+https://github.com/mukulchugh/ctxr" ctxr <url-or-id-or-local-file> ... --out <dir>   # any yt-dlp site, direct link, or local file
 ```
 
-Try `--limit 3` first on a big page. `--proxy URL` routes yt-dlp and caption requests through a proxy if one IP is not enough. Finished folders are skipped on rerun, so an interrupted batch resumes. Then read `<dir>/README.md` (how to study the output) and `<dir>/INDEX.md` (the list). Each video folder has `README.md` (the walkthrough), `manifest.json` (frames with aligned transcript segments), `transcript.{json,srt,txt}` and `frames/`.
+Try `--limit 3` first on a big page. `--vocab "Name, Name"` fixes misspelled brand names in local transcripts. `--proxy URL` routes yt-dlp and caption requests through a proxy if one IP is not enough. Finished folders are skipped on rerun, so an interrupted batch resumes. Then read `<dir>/README.md` (how to study the output) and `<dir>/INDEX.md` (the list). Each video folder has `README.md` (the walkthrough), `manifest.json` (frames with aligned transcript segments), `transcript.{json,srt,txt}` and `frames/`.
 
 ## Reading the output well
 

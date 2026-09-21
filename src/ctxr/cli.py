@@ -174,28 +174,37 @@ def has_audio(video):
     return bool(r.stdout.strip())
 
 
-def transcript_whisper(video, tmp):
+def vocab_prompt(info, vocab=None):
+    """Text Whisper sees before the audio: channel, title and any names the caller supplies, so brand names and
+    product terms come out spelled right. Whisper reads it as preceding transcript, so a plain list of names works."""
+    parts = [re.sub(r"[^\w\s.,'&/-]", "", str(x)).strip() for x in (info.get("channel") or info.get("uploader"), info.get("title"))]
+    parts += [t.strip() for t in re.split(r"[,\n]+", vocab or "") if t.strip()]
+    return ", ".join(dict.fromkeys(x for x in parts if x))[:600]  # ponytail: whisper's prompt window is ~224 tokens
+
+
+def transcript_whisper(video, tmp, prompt=None, model="small"):
     global _whisper
     if not has_audio(video):
         print("    no audio track; frames only")
         return []
     wav = tmp / "audio.wav"
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(video), "-vn", "-ac", "1", "-ar", "16000", str(wav)], check=True)
-    if _whisper is None:
+    if _whisper is None or _whisper[0] != model:
         try:
             from faster_whisper import WhisperModel
         except ImportError:
             raise RuntimeError("no usable English captions and faster-whisper is not installed; install with: uv tool install 'ctxr[whisper]'")
-        _whisper = WhisperModel("small", compute_type="int8")  # ponytail: small is cached locally; bump to large-v3 if accuracy matters
-    segs, _ = _whisper.transcribe(str(wav), language="en", vad_filter=True)
+        _whisper = (model, WhisperModel(model, compute_type="int8"))  # small is cached locally; medium/large-v3 download on first use
+    segs, _ = _whisper[1].transcribe(str(wav), language="en", vad_filter=True, initial_prompt=prompt or None)
     return [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segs]
 
 
 _captions_blocked = False
 
 
-def get_transcript(kind, ref, video, subs, tmp, args):
+def get_transcript(kind, ref, video, subs, tmp, args, info=None):
     global _captions_blocked
+    model = getattr(args, "whisper_model", None) or "small"
     if not args.whisper_all:
         for path in rank_captions(subs):
             segs = captions_from(path)
@@ -211,8 +220,8 @@ def get_transcript(kind, ref, video, subs, tmp, args):
                 print(f"    captions unavailable ({reason}); using local whisper")
         elif kind == "youtube":
             print("    caption endpoint blocked earlier in this run; using local whisper")
-    segs = transcript_whisper(video, tmp)
-    return segs, "whisper-small" if segs else "none"
+    segs = transcript_whisper(video, tmp, vocab_prompt(info or {}, getattr(args, "vocab", None)), model)
+    return segs, f"whisper-{model}" if segs else "none"
 
 
 def extract_frames(video, frames_dir, scene, min_gap, every):
@@ -360,7 +369,7 @@ def _build(kind, ref, key, info, video, subs, folder, tmp, args, page):
     url = video_url(kind, ref, info)
     (folder / "info.json").write_text(json.dumps({k: info.get(k) for k in
         ("id", "title", "channel", "uploader", "upload_date", "duration", "description", "webpage_url", "extractor_key", "categories", "tags")}, indent=1))
-    segments, source = get_transcript(kind, ref, video, subs, tmp, args)
+    segments, source = get_transcript(kind, ref, video, subs, tmp, args, info)
     write_transcript(folder, segments)
     frames = extract_frames(video, folder / "frames", args.scene, args.min_gap, args.every)
     aligned = align(frames, segments)
@@ -368,7 +377,8 @@ def _build(kind, ref, key, info, video, subs, folder, tmp, args, page):
     (folder / "manifest.json").write_text(json.dumps({
         "id": key, "title": info.get("title"), "url": url, "platform": info.get("extractor_key", "Youtube"), "page": page,
         "upload_date": info.get("upload_date"), "duration": info.get("duration"),
-        "transcript_source": source, "frame_params": {"scene": args.scene, "min_gap": args.min_gap, "every": args.every},
+        "transcript_source": source, "vocab": vocab_prompt(info, getattr(args, "vocab", None)) if source.startswith("whisper") else None,
+        "frame_params": {"scene": args.scene, "min_gap": args.min_gap, "every": args.every},
         "frames": aligned}, indent=1))
     if args.keep_video and kind != "file":
         shutil.move(str(video), folder / video.name)
@@ -439,6 +449,8 @@ def self_test():
         srt.write_text("1\n01:00:00,000 --> 01:00:01,000\nan hour in\n\n2\n01:00:01,000 --> 01:00:02,000\n\n")
         assert captions_srt_vtt(srt) == [{"start": 3600.0, "end": 3601.0, "text": "an hour in"}]
         assert [p.name for p in rank_captions([srt, v, j])] == ["abcdefghijk.en-orig.json3", "v.en.vtt", "v.srt"]
+    vp = vocab_prompt({"channel": "Quivly AI", "title": "Week 7 - Quivly MCP - 12 weeks of spring shipping \U0001F338"}, "Claude, Salesforce,\nQuivly")
+    assert vp == "Quivly AI, Week 7 - Quivly MCP - 12 weeks of spring shipping, Claude, Salesforce, Quivly", vp
     md = render("abcdefghijk", {"title": "T", "upload_date": "20260921", "duration": 40}, "youtube", a)
     assert "### 00:10 ([watch](https://youtu.be/abcdefghijk?t=10))" in md and "![00:10](frames/b.jpg)\n\nthree" in md, md
     print("self-test ok")
@@ -456,6 +468,8 @@ def main():
     ap.add_argument("--every", type=float, default=None, help="fixed grid every N seconds instead of scene detection")
     ap.add_argument("--keep-video", action="store_true")
     ap.add_argument("--whisper-all", action="store_true", help="transcribe locally even when captions exist")
+    ap.add_argument("--vocab", default=None, metavar="TERMS", help="comma-separated names to spell right in local transcription (brands, products, people); channel and title are added automatically")
+    ap.add_argument("--whisper-model", default="small", metavar="NAME", help="faster-whisper model for local transcription: small (default, cached), medium, large-v3 (downloaded on first use)")
     ap.add_argument("--proxy", default=None, metavar="URL", help="HTTP/HTTPS/SOCKS proxy for yt-dlp and the caption client, e.g. a rotating residential gateway")
     ap.add_argument("--cookies-from-browser", default=None, metavar="BROWSER", help="let yt-dlp use your browser login (chrome, firefox, safari, ...) for sites that require it, such as Vimeo")
     ap.add_argument("--force", action="store_true")

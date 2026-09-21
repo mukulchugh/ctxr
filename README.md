@@ -93,6 +93,8 @@ Options:
 | `--min-gap 10` | 10 | Also take a frame at least this many seconds apart, so slow stretches are still covered |
 | `--every N` | off | Fixed grid every N seconds instead of scene detection |
 | `--whisper-all` | off | Transcribe locally even when YouTube captions exist (cleaner punctuation) |
+| `--vocab TERMS` | off | Comma-separated names (brands, products, people) that local transcription must spell right; the channel and title are added automatically |
+| `--whisper-model NAME` | small | faster-whisper model for local transcription: small (cached), medium or large-v3 (downloaded on first use) |
 | `--cooldown 5` | 5 | Pause after each video. See rate limits below |
 | `--proxy URL` | off | HTTP, HTTPS or SOCKS proxy for yt-dlp and the caption client, for example a rotating residential gateway |
 | `--cookies-from-browser BROWSER` | off | Let yt-dlp use your browser login (chrome, firefox, safari) for sites that require it |
@@ -106,7 +108,7 @@ A folder that already has `manifest.json` is skipped, so an interrupted batch re
 
 1. **Find the videos.** `--page` fetches the page and pulls out every YouTube id (`watch?v=`, `youtu.be/`, `/embed/`, `/shorts/`, `i.ytimg.com/vi/` thumbnails), Vimeo, Loom and Wistia embeds, and direct media `src` links, in page order. `--playlist` asks yt-dlp for the flat list of any playlist or channel.
 2. **Download.** yt-dlp fetches a 720p mp4 and the metadata JSON from any supported site or direct link. Local files are used where they are. The downloaded mp4 is deleted after the frames are cut unless you pass `--keep-video`.
-3. **Transcript.** English captions come back in the same yt-dlp call (json3 on YouTube, vtt or srt elsewhere; a sidecar file for local videos), so most videos cost no extra requests. For YouTube only, if none were written, youtube-transcript-api is asked once; after the first block it is not asked again for the rest of the run. If there are still no captions, or you pass `--whisper-all`, ffmpeg extracts 16 kHz mono audio and faster-whisper (small model, runs locally) transcribes it. The manifest records which source was used: `captions`, `youtube-transcript-api`, `whisper-small`, or `none` for a video with no audio track (frames only).
+3. **Transcript.** English captions come back in the same yt-dlp call (json3 on YouTube, vtt or srt elsewhere; a sidecar file for local videos), so most videos cost no extra requests. For YouTube only, if none were written, youtube-transcript-api is asked once; after the first block it is not asked again for the rest of the run. If there are still no captions, or you pass `--whisper-all`, ffmpeg extracts 16 kHz mono audio and faster-whisper (small model by default, runs locally) transcribes it, primed with the channel name, the title and any `--vocab` terms so product and brand names are spelled correctly. The manifest records which source was used: `captions`, `youtube-transcript-api`, `whisper-small`, or `none` for a video with no audio track (frames only).
 4. **Frames.** One ffmpeg pass with a scene-change filter, a 1.5 second debounce so a transition does not produce a burst, and a floor of one frame every `--min-gap` seconds. Frame count scales with how much the picture changes, not with frame rate.
 5. **Align.** Each transcript segment is placed under the last frame shown at or before the segment starts.
 6. **Write.** README.md, manifest.json, transcript files per video, then INDEX.md, ALL-DEMOS.md and an agent-facing README.md at the root.
