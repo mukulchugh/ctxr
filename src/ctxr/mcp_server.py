@@ -121,12 +121,13 @@ async def ctxr_process(
     out: str | None = None,
     limit: int | None = None,
     whisper_all: bool = False,
+    proxy: str | None = None,
     background: bool = False,
 ) -> ProcessResult:
     """Turn YouTube videos into context. Give video ids/urls in items, a playlist or channel url, or a page url
     (every YouTube video embedded on it is processed). Already-processed videos are skipped. Inline mode reports
     progress per video and returns when done; background=true returns at once and ctxr_status reports progress
-    (use it for more than ~5 videos)."""
+    (use it for more than ~5 videos). proxy routes yt-dlp and caption requests through an HTTP/SOCKS proxy."""
     o = _out(out)
     ids = _resolve(items, page, playlist)[:limit]
     if not ids:
@@ -134,13 +135,13 @@ async def ctxr_process(
     if background:
         cmd = [sys.executable, "-m", "ctxr.cli", "--out", str(o)] + (["--page", page] if page else []) + \
               (["--playlist", playlist] if playlist else []) + (items or []) + (["--limit", str(limit)] if limit else []) + \
-              (["--whisper-all"] if whisper_all else [])
+              (["--whisper-all"] if whisper_all else []) + (["--proxy", proxy] if proxy else [])
         logf = o / "ctxr.log"
         proc = subprocess.Popen(cmd, stdout=open(logf, "ab"), stderr=subprocess.STDOUT, start_new_session=True)
         (o / "ctxr.pid").write_text(str(proc.pid))
         return ProcessResult(out=str(o), requested=len(ids), done=0, failed=[], background=True, log=str(logf),
                              note=f"started pid {proc.pid}; poll ctxr_status(out) until running is false")
-    args = argparse.Namespace(scene=0.05, min_gap=10, every=None, force=False, keep_video=False, whisper_all=whisper_all)
+    args = argparse.Namespace(scene=0.05, min_gap=10, every=None, force=False, keep_video=False, whisper_all=whisper_all, proxy=proxy)
     failed = []
     for i, (vid, src) in enumerate(ids, 1):
         await ctx.report_progress(i - 1, len(ids), f"{vid} ({i}/{len(ids)})")

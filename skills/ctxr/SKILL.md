@@ -21,7 +21,7 @@ uvx --from "ctxr[whisper] @ git+https://github.com/mukulchugh/ctxr" ctxr --playl
 uvx --from "ctxr[whisper] @ git+https://github.com/mukulchugh/ctxr" ctxr <video-url-or-id> ... --out <dir>
 ```
 
-Try `--limit 3` first on a big page. Finished folders are skipped on rerun, so an interrupted batch resumes. Then read `<dir>/README.md` (how to study the output) and `<dir>/INDEX.md` (the list). Each video folder has `README.md` (the walkthrough), `manifest.json` (frames with aligned transcript segments), `transcript.{json,srt,txt}` and `frames/`.
+Try `--limit 3` first on a big page. `--proxy URL` routes yt-dlp and caption requests through a proxy if one IP is not enough. Finished folders are skipped on rerun, so an interrupted batch resumes. Then read `<dir>/README.md` (how to study the output) and `<dir>/INDEX.md` (the list). Each video folder has `README.md` (the walkthrough), `manifest.json` (frames with aligned transcript segments), `transcript.{json,srt,txt}` and `frames/`.
 
 ## Reading the output well
 

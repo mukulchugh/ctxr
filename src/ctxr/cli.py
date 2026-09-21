@@ -54,30 +54,53 @@ def parse_id(s):
 
 
 # ---------- per-video steps ----------
-def download(vid, tmp):
+def download(vid, tmp, proxy=None):
     # ponytail: YouTube answers 403 on media URLs when rate-limited; "-t sleep" is yt-dlp's own anti-rate-limit preset
-    # (0.75s between requests, 10-20s random pause before each download, 5s before subtitles); on failure back off + switch client
-    for attempt, (wait, client) in enumerate([(0, None), (15, "ios"), (45, "android"), (90, None)]):
+    # (0.75s between requests, 10-20s random pause before each download, 5s before subtitles); on failure back off and retry.
+    # Retries stay on the default client: ios/android need a PO token ctxr does not generate (docs/RATE-LIMITS.md).
+    # Captions ride along in the same call (json3), so no separate caption requests are needed for most videos.
+    for attempt, wait in enumerate([0, 15, 45, 90]):
         time.sleep(wait)
         cmd = YTDLP + ["-q", "--no-warnings", "-t", "sleep", "-f", "bv*[height<=720]+ba/b[height<=720]",
-               "--merge-output-format", "mp4", "--write-info-json", "-o", str(tmp / f"{vid}.%(ext)s")]
-        if client:
-            cmd += ["--extractor-args", f"youtube:player_client={client}"]
-        r = subprocess.run(cmd + [f"https://www.youtube.com/watch?v={vid}"], capture_output=True, text=True)
-        if r.returncode == 0:
+               "--merge-output-format", "mp4", "--write-info-json",
+               "--write-subs", "--write-auto-subs", "--sub-langs", "en.*", "--sub-format", "json3",
+               "-o", str(tmp / f"{vid}.%(ext)s")]
+        if proxy:
+            cmd += ["--proxy", proxy]
+        # -i: a failed caption download (the endpoint YouTube throttles first) must not fail the video
+        r = subprocess.run(cmd + ["-i", f"https://www.youtube.com/watch?v={vid}"], capture_output=True, text=True)
+        video = next((p for p in tmp.glob(f"{vid}.*") if p.suffix not in (".json", ".json3", ".part")), None)
+        if video and (tmp / f"{vid}.info.json").exists():
             break
         err = (r.stderr.strip().splitlines() or ["?"])[-1]
         print(f"    download attempt {attempt + 1} failed: {err}")
     else:
         raise RuntimeError(f"yt-dlp failed after 4 attempts: {err}")
-    info = json.loads((tmp / f"{vid}.info.json").read_text())
-    video = next(p for p in tmp.glob(f"{vid}.*") if p.suffix != ".json")
-    return video, info
+    return video, json.loads((tmp / f"{vid}.info.json").read_text())
 
 
-def transcript_youtube(vid):
+def captions_json3(path):
+    """Segments from a YouTube json3 caption file (what yt-dlp writes for --sub-format json3)."""
+    segs = []
+    for e in json.loads(path.read_text()).get("events", []):
+        text = "".join(s.get("utf8", "") for s in e.get("segs", [])).replace("\n", " ").strip()
+        if text and "tStartMs" in e:
+            start = e["tStartMs"] / 1000
+            segs.append({"start": start, "end": start + e.get("dDurationMs", 0) / 1000, "text": text})
+    return segs
+
+
+def caption_files(vid, tmp):
+    """json3 files yt-dlp wrote, best first: manual/processed en, then en-orig, then other English variants."""
+    rank = {"en": 0, "en-orig": 1}
+    return sorted(tmp.glob(f"{vid}.*.json3"), key=lambda p: rank.get(p.name[len(vid) + 1:-len(".json3")], 2))
+
+
+def transcript_youtube(vid, proxy=None):
     from youtube_transcript_api import YouTubeTranscriptApi
-    fetched = YouTubeTranscriptApi().fetch(vid, languages=["en"])
+    from youtube_transcript_api.proxies import GenericProxyConfig
+    api = YouTubeTranscriptApi(proxy_config=GenericProxyConfig(http_url=proxy, https_url=proxy) if proxy else None)
+    fetched = api.fetch(vid, languages=["en"])
     return [{"start": s.start, "end": s.start + s.duration, "text": s.text.replace("\n", " ").strip()} for s in fetched]
 
 
@@ -95,17 +118,26 @@ def transcript_whisper(video, tmp):
     return [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segs]
 
 
-def get_transcript(vid, video, tmp, whisper_all):
-    if not whisper_all:
-        for attempt in (1, 2):
+_captions_blocked = False
+
+
+def get_transcript(vid, video, tmp, args):
+    global _captions_blocked
+    if not args.whisper_all:
+        for path in caption_files(vid, tmp):
+            segs = captions_json3(path)
+            if segs:
+                return segs, "youtube"
+        if not _captions_blocked:
             try:
-                return transcript_youtube(vid), "youtube"
-            except Exception as e:  # NoTranscriptFound, TranscriptsDisabled, IpBlocked, ...
+                return transcript_youtube(vid, args.proxy), "youtube-transcript-api"
+            except Exception as e:  # NoTranscriptFound, TranscriptsDisabled, IpBlocked, RequestBlocked, ...
                 reason = type(e).__name__
-                if reason in ("NoTranscriptFound", "TranscriptsDisabled", "InvalidVideoId"):
-                    break
-                time.sleep(5)
-        print(f"    captions unavailable ({reason}); using local whisper")
+                if reason in ("IpBlocked", "RequestBlocked"):
+                    _captions_blocked = True  # ponytail: one block means the IP is flagged; stop asking for the rest of the batch
+                print(f"    captions unavailable ({reason}); using local whisper")
+        else:
+            print("    caption endpoint blocked earlier in this run; using local whisper")
     return transcript_whisper(video, tmp), "whisper-small"
 
 
@@ -197,7 +229,7 @@ def process(vid, out, args, page=None):
         print(f"  skip (done): {existing.name}"); return existing
     with tempfile.TemporaryDirectory(dir=out, prefix=".tmp-") as td:
         tmp = Path(td)
-        video, info = download(vid, tmp)
+        video, info = download(vid, tmp, args.proxy)
         d = info.get("upload_date") or "00000000"
         folder = out / f"{d[:4]}-{d[4:6]}-{d[6:8]}-{slug(info.get('title', vid))}-{vid}"
         if folder.exists():
@@ -213,7 +245,7 @@ def process(vid, out, args, page=None):
 def _build(vid, info, video, folder, tmp, args, page):
     (folder / "info.json").write_text(json.dumps({k: info.get(k) for k in
         ("id", "title", "channel", "uploader", "upload_date", "duration", "description", "webpage_url", "categories", "tags")}, indent=1))
-    segments, source = get_transcript(vid, video, tmp, args.whisper_all)
+    segments, source = get_transcript(vid, video, tmp, args)
     write_transcript(folder, segments)
     frames = extract_frames(video, folder / "frames", args.scene, args.min_gap, args.every)
     aligned = align(frames, segments)
@@ -271,6 +303,13 @@ def self_test():
     html = '<img src="https://i.ytimg.com/vi/o56Lz_J1V2o/max.jpg"><a href="https://www.youtube.com/watch?v=o56Lz_J1V2o"><a href="https://youtu.be/ESVG7uGPYPQ">'
     assert ids_from_html(html) == ["o56Lz_J1V2o", "ESVG7uGPYPQ"], ids_from_html(html)
     assert (fmt_ts(83), fmt_ts(3725), fmt_file(83), fmt_srt(83.5)) == ("01:23", "1:02:05", "01m23s", "00:01:23,500"), (fmt_ts(83), fmt_ts(3725), fmt_file(83), fmt_srt(83.5))
+    with tempfile.TemporaryDirectory() as td:
+        j = Path(td) / "abcdefghijk.en-orig.json3"
+        j.write_text(json.dumps({"events": [{"tStartMs": 0, "wWinId": 1}, {"tStartMs": 500, "dDurationMs": 2000, "segs": [{"utf8": "hello"}, {"utf8": " there", "tOffsetMs": 300}]},
+                                            {"tStartMs": 2500, "dDurationMs": 100, "aAppend": 1, "segs": [{"utf8": "\n"}]}]}))
+        (Path(td) / "abcdefghijk.en.json3").write_text(json.dumps({"events": []}))
+        assert [p.name for p in caption_files("abcdefghijk", Path(td))] == ["abcdefghijk.en.json3", "abcdefghijk.en-orig.json3"]
+        assert captions_json3(j) == [{"start": 0.5, "end": 2.5, "text": "hello there"}], captions_json3(j)
     md = render("abcdefghijk", {"title": "T", "upload_date": "20260921", "duration": 40}, "youtube", a)
     assert "### 00:10 ([watch](https://youtu.be/abcdefghijk?t=10))" in md and "![00:10](frames/b.jpg)\n\nthree" in md, md
     print("self-test ok")
@@ -288,6 +327,7 @@ def main():
     ap.add_argument("--every", type=float, default=None, help="fixed grid every N seconds instead of scene detection")
     ap.add_argument("--keep-video", action="store_true")
     ap.add_argument("--whisper-all", action="store_true", help="transcribe locally even when captions exist")
+    ap.add_argument("--proxy", default=None, metavar="URL", help="HTTP/HTTPS/SOCKS proxy for yt-dlp and the caption client, e.g. a rotating residential gateway")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--cooldown", type=float, default=5, help="seconds to pause after each video, on top of yt-dlp's sleep preset")

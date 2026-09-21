@@ -79,6 +79,7 @@ Options:
 | `--every N` | off | Fixed grid every N seconds instead of scene detection |
 | `--whisper-all` | off | Transcribe locally even when YouTube captions exist (cleaner punctuation) |
 | `--cooldown 5` | 5 | Pause after each video. See rate limits below |
+| `--proxy URL` | off | HTTP, HTTPS or SOCKS proxy for yt-dlp and the caption client, for example a rotating residential gateway |
 | `--keep-video` | off | Keep the downloaded mp4 next to the frames |
 | `--force` | off | Redo folders that already have a manifest |
 | `--self-test` | | Run the built-in check and exit |
@@ -89,14 +90,14 @@ A folder that already has `manifest.json` is skipped, so an interrupted batch re
 
 1. **Find the videos.** `--page` fetches the page and pulls every YouTube id out of `watch?v=`, `youtu.be/`, `/embed/` and `i.ytimg.com/vi/` thumbnail links, in page order. `--playlist` asks yt-dlp for the flat list.
 2. **Download.** yt-dlp fetches a 720p mp4 and the metadata JSON. The mp4 is deleted after the frames are cut unless you pass `--keep-video`.
-3. **Transcript.** youtube-transcript-api fetches English captions. If the video has none, or YouTube blocks the request, or you pass `--whisper-all`, ffmpeg extracts 16 kHz mono audio and faster-whisper (small model, runs locally) transcribes it. The manifest records which source was used.
+3. **Transcript.** English captions come back in the same yt-dlp call as json3, so most videos cost no extra requests. If none were written, youtube-transcript-api is asked once; after the first block from YouTube it is not asked again for the rest of the run. If there are still no captions, or you pass `--whisper-all`, ffmpeg extracts 16 kHz mono audio and faster-whisper (small model, runs locally) transcribes it. The manifest records which source was used: `youtube`, `youtube-transcript-api` or `whisper-small`.
 4. **Frames.** One ffmpeg pass with a scene-change filter, a 1.5 second debounce so a transition does not produce a burst, and a floor of one frame every `--min-gap` seconds. Frame count scales with how much the picture changes, not with frame rate.
 5. **Align.** Each transcript segment is placed under the last frame shown at or before the segment starts.
 6. **Write.** README.md, manifest.json, transcript files per video, then INDEX.md, ALL-DEMOS.md and an agent-facing README.md at the root.
 
 ## Rate limits
 
-YouTube publishes no limits for these endpoints, but it rate-limits quickly. In one 73-video run from a home connection, caption requests started failing after about 17 videos in 5 minutes and downloads returned 403 every 10 videos or so. ctxr therefore runs yt-dlp with its own `-t sleep` preset (a 10 to 20 second random pause before each download, 0.75 seconds between requests), pauses `--cooldown` seconds after each video, and on a failed download backs off 15, 45 and 90 seconds while switching YouTube player client. With those settings the rest of that run finished with zero failures, at about one video per minute.
+YouTube publishes no limits for these endpoints, but it rate-limits quickly. In one 73-video run from a home connection, caption requests started failing after about 17 videos in 5 minutes and downloads returned 403 every 10 videos or so. ctxr therefore runs yt-dlp with its own `-t sleep` preset (a 10 to 20 second random pause before each download, 0.75 seconds between requests), pauses `--cooldown` seconds after each video, fetches captions inside the download call instead of through a second client, stops asking the caption endpoint after the first block, and on a failed download backs off 15, 45 and 90 seconds on the default player client (the ios and android clients need a PO token, so switching to them only wastes the wait). With those settings the rest of that run finished with zero failures, at about one video per minute. If you need YouTube's own captions at a scale where one IP is not enough, pass `--proxy` with a rotating residential gateway; datacenter proxies, cloud IPs and Tor are blocked outright.
 
 A source-backed write-up of what blocks, what works, what it costs and where the terms of service stand is in [docs/RATE-LIMITS.md](docs/RATE-LIMITS.md).
 
