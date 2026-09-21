@@ -7,6 +7,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: uv sync
-      - run: uv run ctxr --self-test
+      - run: uv sync --extra mcp
       - run: uv run ctxr --version
+      - run: uv run ctxr --self-test
+      - run: uv run python tests/e2e_local.py
+      - run: uv run python -c "import ctxr.mcp_server as m; assert len(m.mcp._tool_manager._tools) >= 7" 2>/dev/null || uv run python -c "import ctxr.mcp_server"

@@ -60,7 +60,7 @@ uv tool install "ctxr[whisper] @ git+https://github.com/mukulchugh/ctxr"      # 
 uv tool install "ctxr[whisper,mcp] @ git+https://github.com/mukulchugh/ctxr"  # plus the MCP server (ctxr-mcp)
 ```
 
-Or run it without installing: `uvx --from "ctxr @ git+https://github.com/mukulchugh/ctxr" ctxr <url>`. ctxr is installed from this repository; there is no PyPI package.
+Or run it without installing: `uvx --from "ctxr @ git+https://github.com/mukulchugh/ctxr" ctxr <url>`. ctxr is installed from this repository; there is no PyPI package. To pin a release instead of tracking main, add `@v0.1.0` after the repository url.
 
 ## Usage
 
