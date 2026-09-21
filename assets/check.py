@@ -29,6 +29,6 @@ assert meta['frame_seconds'] <= meta['transcript']['start'] < meta['next_frame_s
 assert hashlib.sha256((A / 'source/frame.jpg').read_bytes()).hexdigest() == meta['frame_sha256']
 readme = (A.parent / 'README.md').read_text()
 for path in re.findall(r'(?:src|srcset)="(assets/[^\"]+)"', readme):
-    assert (A.parent / path).is_file(), path
+    assert (A.parent / path.split("?", 1)[0]).is_file(), path
 assert 'prefers-color-scheme: dark' in readme and 'prefers-color-scheme: light' in readme
 print('Brand dimensions, upload size, outlines, embedded frame, source alignment, favicon sizes and README links verified.')
