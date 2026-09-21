@@ -8,7 +8,7 @@ Per video:  yt-dlp (720p mp4) -> youtube-transcript-api (English captions, local
 fallback) -> ffmpeg scene-change frames -> README.md that puts each frame next to what was
 being said, plus manifest.json for programmatic use. Index over all videos at the end.
 """
-import argparse, json, re, shutil, subprocess, sys, tempfile, time, urllib.request
+import argparse, json, os, re, shutil, subprocess, sys, tempfile, time, urllib.request
 from pathlib import Path
 
 __version__ = "0.1.0"
@@ -38,6 +38,18 @@ _whisper = None
 
 class BotCheck(RuntimeError):
     """YouTube's 'Sign in to confirm you're not a bot' block: IP-level, lasts hours, retries only make it worse."""
+
+
+def version_line():
+    """ctxr plus the two things that break first when YouTube changes, for issue reports."""
+    try:
+        yt = subprocess.run(YTDLP + ["--version"], capture_output=True, text=True).stdout.strip()
+    except Exception:
+        yt = "missing"
+    ff = shutil.which("ffmpeg")
+    if ff:
+        ff = (subprocess.run([ff, "-version"], capture_output=True, text=True).stdout.splitlines() or ["ffmpeg ?"])[0].split()[2]
+    return f"ctxr {__version__} (yt-dlp {yt}, ffmpeg {ff or 'missing'}, python {sys.version.split()[0]})"
 
 
 # ---------- resolve links ----------
@@ -101,7 +113,7 @@ def parse_id(s):  # kept for callers that only understand YouTube ids
 SUB_EXT = (".json3", ".vtt", ".srt")
 
 
-def download(kind, ref, tmp, proxy=None, cookies_from_browser=None):
+def download(kind, ref, tmp, proxy=None, cookies_from_browser=None, cookies=None):
     """Fetch the video and its captions into tmp. Returns (video_path, info, caption_files)."""
     if kind == "file":
         dur = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(ref)],
@@ -125,6 +137,8 @@ def download(kind, ref, tmp, proxy=None, cookies_from_browser=None):
             cmd += ["--proxy", proxy]
         if cookies_from_browser:  # some sites (Vimeo, at the time of writing) only serve logged-in clients
             cmd += ["--cookies-from-browser", cookies_from_browser]
+        if cookies:  # a Netscape cookies file, for machines without a browser
+            cmd += ["--cookies", str(cookies)]
         # -i: a failed caption download (the endpoint YouTube throttles first) must not fail the video
         r = subprocess.run(cmd + ["-i", url], capture_output=True, text=True)
         video = next((p for p in tmp.glob("v.*") if p.suffix.lower() in VIDEO_EXT), None)
@@ -366,7 +380,7 @@ def process(item, out, args, page=None):
         print(f"  skip (done): {existing.name}"); return existing
     with tempfile.TemporaryDirectory(dir=out, prefix=".tmp-") as td:
         tmp = Path(td)
-        video, info, subs = download(kind, ref, tmp, args.proxy, getattr(args, "cookies_from_browser", None))
+        video, info, subs = download(kind, ref, tmp, args.proxy, getattr(args, "cookies_from_browser", None), getattr(args, "cookies", None))
         key = item_key(kind, ref, info)
         existing = next(out.glob(f"*-{key}"), None)
         if existing and (existing / "manifest.json").exists() and not args.force:
@@ -522,7 +536,7 @@ def self_test():
 
 def main():
     ap = argparse.ArgumentParser(prog="ctxr", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--version", action="version", version=f"ctxr {__version__}")
+    ap.add_argument("--version", action="version", version=version_line())
     ap.add_argument("items", nargs="*", help="video urls (YouTube, Vimeo, Loom, Wistia, X, TikTok, direct mp4/m3u8, any yt-dlp site), YouTube ids, or local video files")
     ap.add_argument("--page", action="append", default=[], help="scrape every embedded video from this page")
     ap.add_argument("--playlist", action="append", default=[], help="expand a playlist/channel url (any yt-dlp site)")
@@ -534,8 +548,9 @@ def main():
     ap.add_argument("--whisper-all", action="store_true", help="transcribe locally even when captions exist")
     ap.add_argument("--vocab", default=None, metavar="TERMS", help="comma-separated names to spell right in local transcription (brands, products, people); channel and title are added automatically")
     ap.add_argument("--whisper-model", default="small", metavar="NAME", help="faster-whisper model for local transcription: small (default, cached), medium, large-v3 (downloaded on first use)")
-    ap.add_argument("--proxy", default=None, metavar="URL", help="HTTP/HTTPS/SOCKS proxy for yt-dlp and the caption client, e.g. a rotating residential gateway")
+    ap.add_argument("--proxy", default=os.environ.get("CTXR_PROXY"), metavar="URL", help="HTTP/HTTPS/SOCKS proxy for yt-dlp and the caption client, e.g. a rotating residential gateway (default: $CTXR_PROXY)")
     ap.add_argument("--cookies-from-browser", default=None, metavar="BROWSER", help="let yt-dlp use your browser login (chrome, firefox, safari, ...) for sites that require it, such as Vimeo")
+    ap.add_argument("--cookies", default=None, metavar="FILE", help="a Netscape-format cookies file for yt-dlp, for machines without a browser")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--find", metavar="QUERY", help="list candidate videos for a search phrase or a channel/playlist url (no download) and exit")

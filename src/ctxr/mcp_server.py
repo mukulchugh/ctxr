@@ -156,7 +156,7 @@ async def ctxr_process(
         (o / "ctxr.pid").write_text(str(proc.pid))
         return ProcessResult(out=str(o), requested=len(ids), done=0, failed=[], background=True, log=str(logf),
                              note=f"started pid {proc.pid}; poll ctxr_status(out) until running is false")
-    args = argparse.Namespace(scene=0.05, min_gap=10, every=None, force=False, keep_video=False, whisper_all=whisper_all, proxy=proxy,
+    args = argparse.Namespace(scene=0.05, min_gap=10, every=None, force=False, keep_video=False, whisper_all=whisper_all, proxy=proxy or os.environ.get("CTXR_PROXY"),
                               vocab=vocab, whisper_model=whisper_model)
     failed = []
     for i, (vid, src) in enumerate(ids, 1):

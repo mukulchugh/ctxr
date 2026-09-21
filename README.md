@@ -96,8 +96,9 @@ Options:
 | `--vocab TERMS` | off | Comma-separated names (brands, products, people) that local transcription must spell right; the channel and title are added automatically |
 | `--whisper-model NAME` | small | faster-whisper model for local transcription: small (cached), medium or large-v3 (downloaded on first use) |
 | `--cooldown 5` | 5 | Pause after each video. See rate limits below |
-| `--proxy URL` | off | HTTP, HTTPS or SOCKS proxy for yt-dlp and the caption client, for example a rotating residential gateway |
+| `--proxy URL` | `$CTXR_PROXY` | HTTP, HTTPS or SOCKS proxy for yt-dlp and the caption client, for example a rotating residential gateway |
 | `--cookies-from-browser BROWSER` | off | Let yt-dlp use your browser login (chrome, firefox, safari) for sites that require it |
+| `--cookies FILE` | off | A Netscape-format cookies file, for machines without a browser |
 | `--keep-video` | off | Keep the downloaded mp4 next to the frames |
 | `--force` | off | Redo folders that already have a manifest |
 | `--find QUERY` | | List candidate videos for a search phrase or a channel/playlist url, as JSON lines, and exit. Nothing is downloaded |
@@ -116,9 +117,20 @@ A folder that already has `manifest.json` is skipped, so an interrupted batch re
 6. **Write.** README.md, manifest.json, transcript files per video, then INDEX.md, ALL-DEMOS.md and an agent-facing README.md at the root.
 7. **Search.** `--search` and the `ctxr_search` tool build a SQLite full-text index (`ctxr.sqlite` in the output folder, porter stemming, bm25 ranking) from the manifests and rebuild it when a manifest is newer. All terms must match; if nothing does, any term.
 
-## Rate limits
+## YouTube limits, and what to do when you hit them
 
-YouTube publishes no limits for these endpoints, but it rate-limits quickly. In one 73-video run from a home connection, caption requests started failing after about 17 videos in 5 minutes and downloads returned 403 every 10 videos or so. ctxr therefore runs yt-dlp with its own `-t sleep` preset (a 10 to 20 second random pause before each download, 0.75 seconds between requests), pauses `--cooldown` seconds after each video, fetches captions inside the download call instead of through a second client, stops asking the caption endpoint after the first block, and on a failed download backs off 15, 45 and 90 seconds on the default player client (the ios and android clients need a PO token, so switching to them only wastes the wait). With those settings the rest of that run finished with zero failures, at about one video per minute. If YouTube answers "Sign in to confirm you're not a bot", ctxr stops the batch at once instead of retrying, because that block is per IP and lasts hours; finished folders are kept and a later rerun picks up the rest, or pass `--cookies-from-browser` or `--proxy`. If you need YouTube's own captions at a scale where one IP is not enough, pass `--proxy` with a rotating residential gateway; datacenter proxies, cloud IPs and Tor are blocked outright.
+YouTube publishes no limits for the endpoints yt-dlp and the caption client use, but it rate-limits per IP and it does so quickly. ctxr paces itself: yt-dlp's own `-t sleep` preset (a 10 to 20 second random pause before each download), a `--cooldown` after each video, captions fetched inside the download call instead of through a second client, and no more caption requests after the first block. Expect about one video per minute. That is comfortably inside yt-dlp's documented guest limit of roughly 300 videos per hour, and a few hundred videos a day from a home connection has worked without any failures.
+
+What the errors mean:
+
+| You see | What it is | What to do |
+|---|---|---|
+| `captions unavailable (IpBlocked)`, then Whisper | YouTube throttled the caption endpoint for your IP | Nothing. Local transcription takes over; ctxr stops asking for captions for the rest of the run |
+| `HTTP Error 403: Forbidden` on a download | Media URL throttled | ctxr backs off 15, 45 and 90 seconds and usually gets through; if not, the video is listed as failed and a rerun picks it up |
+| `STOPPED ... Sign in to confirm you're not a bot` | An IP-level bot check that lasts hours | ctxr stops the batch and keeps what is done. Wait a few hours and rerun, or pass `--cookies-from-browser chrome` / `--cookies FILE`, or `--proxy` |
+| `Requested format is not available`, `Unable to extract ...` | YouTube changed something | Update yt-dlp first: reinstall ctxr (`uv tool install --force ...`) or `uv tool upgrade ctxr`. Include `ctxr --version` in any issue |
+
+Things that do not work, so you do not waste an afternoon on them: cloud VMs, CI runners and datacenter proxies (YouTube blocks their address ranges outright, for captions and downloads alike), Tor (exit addresses are public), and free proxy lists. If you need more than one IP, it has to be a rotating residential proxy (Webshare, Decodo, IPRoyal, Oxylabs), set once as `CTXR_PROXY` or passed as `--proxy`; you pay per gigabyte, and the video bytes go through it too, so it makes sense for large or frequent runs, not for a playlist. Browser cookies work immediately but tie the activity to your Google account; fine for a handful of videos, unwise for bulk. All of this is automated access without YouTube's written permission, which its terms prohibit; pacing lowers the chance of a block, it does not change that.
 
 A source-backed write-up of what blocks, what works, what it costs and where the terms of service stand is in [docs/RATE-LIMITS.md](docs/RATE-LIMITS.md).
 
